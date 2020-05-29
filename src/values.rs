@@ -6,6 +6,8 @@ pub enum Value {
     String(String),
 }
 
+const _VALUE : Value = Value::Empty;
+
 impl Value {
     pub fn int(value: i64) -> Value {
         Value::Integer(value)
@@ -20,6 +22,6 @@ impl Value {
     }
 
     pub fn empty() -> Value {
-        Value::Empty
+        _VALUE
     }
 }

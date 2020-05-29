@@ -62,6 +62,9 @@ impl Expr {
             ExprKind::IntConstant(_) => {
 
             },
+            ExprKind::StringConstant(_) => {
+
+            },
             ExprKind::Return(_) => {
 
             },
@@ -92,6 +95,10 @@ impl Expr {
                 //println!("int constant");
                 compiler.visit_int_constant(&self.kind, f);
             },
+            ExprKind::StringConstant(_) => {
+                //println!("int constant");
+                compiler.visit_string_constant(&self.kind, f);
+            },
             ExprKind::Return(_) => {
                 //println!("visiting return in function");
                 compiler.visit_return(&self.kind, f);
@@ -117,6 +124,7 @@ pub enum ExprKind {
     Function(String, String, Vec<Ptr<(String,String)>>, Ptr<Block>),
     If(Ptr<Expr>, Ptr<Block>, Option<Ptr<Expr>>),
     IntConstant(i64),
+    StringConstant(String),
     Return(Option<Ptr<Expr>>),
     Reference(String),
     BinaryOp(Ptr<Expr>, Ptr<Expr>, BinaryOp),

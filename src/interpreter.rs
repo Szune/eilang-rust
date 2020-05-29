@@ -6,7 +6,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::cell::{Cell};
 use std::collections::HashMap;
-use std::borrow::BorrowMut;
+use std::borrow::{BorrowMut, Borrow};
 
 pub struct Scope {
     /*r0: Cell<Rc<Value>>,
@@ -71,6 +71,12 @@ impl Interpreter {
                             },
                             _ => unimplemented!(),
                         },
+                        Value::String(l) => match right.unwrap().deref() {
+                            Value::String(r) => {
+                                stack.push(Rc::new(Value::string(l.clone() + &r.clone())));
+                            },
+                            _ => unimplemented!(),
+                        },
                         _ => unimplemented!(),
                     }
                 },
@@ -114,8 +120,11 @@ impl Interpreter {
                     if frame.called_with_arg_count < 1 {
                         println!();
                     } else {
+                        // TODO: use called_with_arg_count and merge them to one print statement
+                        // TODO: format the printed value depending on the value's type
                         let value = stack.pop().unwrap();
-                        println!("{:?}", value);
+                        let print_value = get_printable_value(value);
+                        println!("{}", print_value);
                     }
                 },
                 OperationCodes::FunctionSetVar(n) => {
@@ -134,5 +143,23 @@ impl Interpreter {
                 skip_inc = false;
             }
         }
+    }
+
+}
+
+fn get_printable_value(value: Rc<Value>) -> String {
+    match value.borrow() {
+        Value::Empty => {
+            return "{}".into();
+        },
+        Value::Integer(i) => {
+            return format!("{}", i);
+        },
+        Value::Double(d) => {
+            return format!("{}", d);
+        },
+        Value::String(s) => {
+            return s.clone();
+        },
     }
 }

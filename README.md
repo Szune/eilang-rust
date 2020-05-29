@@ -10,5 +10,6 @@ fn add(x: int, y: int) -> int { // function declarations
 	return x + y;
 }
 
-println(add(5,9)); // nested function calls, comments, prints "Integer(14)" (a reasonable println function is on the way)
+println(add(5,9)); // nested function calls, comments, prints "14"
+println("hello world");
 ```

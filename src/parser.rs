@@ -157,6 +157,7 @@ impl Parser {
             TokenType::Integer => Expr::new(ExprKind::IntConstant(
                 self.consume_and_return().integer.unwrap(),
             )),
+            TokenType::String => Expr::new(ExprKind::StringConstant(self.consume_and_return().string.unwrap())),
             TokenType::Identifier => {
                 let ident = self.parse_full_identifier();
                 if self.is_token(TokenType::LeftParenthesis) {

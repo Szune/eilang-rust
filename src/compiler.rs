@@ -131,4 +131,12 @@ impl Compiler {
                 func.code.push(OperationCodes::Push(Rc::new(Value::int(*num))));
         });
     }
+
+
+    pub fn visit_string_constant(&mut self, s: &ExprKind, func: &mut Function) {
+        qm!(s,
+            StringConstant(str) => {
+                func.code.push(OperationCodes::Push(Rc::new(Value::string(str.clone()))));
+        });
+    }
 }
