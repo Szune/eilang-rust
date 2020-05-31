@@ -19,11 +19,14 @@ use typechecker::TypeChecker;
 fn main() {
     // implement different types of chars for different encodings? or just one 'char'
     // that deals with everything as regular bytes?
-    // start to think about typechecking soon
     let lexer_for_parser = Lexer::new(String::from(
         r#"fn add(x: int, y: int) -> int { return x + y; }
         fn a_2(x: int) -> int { return x + 1359; }
         fn poutine(x: string) -> string { return x + "yeppo"; }
+        fn im_void() -> any { return "Hello"; }
+        fn add_int_to_str(i: int, s: string) -> string { return s + i; }
+        println(add_int_to_str(139, "this value is not pi "));
+        println(add(10, a_2(5)));
         println(poutine("it is "));
         println(add(5,9));
         println(a_2(195));

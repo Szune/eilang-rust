@@ -75,6 +75,10 @@ impl Interpreter {
                             Value::String(r) => {
                                 stack.push(Rc::new(Value::string(l.clone() + &r.clone())));
                             },
+                            Value::Integer(r) => {
+                                // this can't be the right way to do it...
+                                stack.push(Rc::new(Value::string(l.clone() + format!("{}", &r.clone()).as_str())));
+                            }
                             _ => unimplemented!(),
                         },
                         _ => unimplemented!(),
