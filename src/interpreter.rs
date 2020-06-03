@@ -84,6 +84,19 @@ impl Interpreter {
                         _ => unimplemented!(),
                     }
                 },
+                OperationCodes::Subtract => {
+                    let right = stack.pop();
+                    let left = stack.pop();
+                    match left.unwrap().deref() {
+                        Value::Integer(l) => match right.unwrap().deref() {
+                            Value::Integer(r) => {
+                                stack.push(Rc::new(Value::int(l - r)));
+                            },
+                            _ => unimplemented!(),
+                        },
+                        _ => unimplemented!(),
+                    }
+                }
                 OperationCodes::Call => {
                     let name = stack.pop();
                     let arg_count = match stack.pop().unwrap().deref() {

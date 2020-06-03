@@ -27,9 +27,17 @@ fn main() {
         fn add_int_to_str(i: int, s: string) -> string { return s + i; }
         println(add_int_to_str(139, "this value is not pi "));
         println(add(10, a_2(5)));
-        println(poutine("it is "));
-        println(add(5,9));
+        println(poutine("it is " + 5 + " "));
+        //println(add("hej" + 5,9));
+        //println(add("0" + s,9));
         println(a_2(195));
+        /*
+        println(a_2("hel"));
+        println(add("hel"));
+        println(add("hel", 0));
+        */
+        println(add(10 - 7, 5 - 7));
+        println("subraction: " + (10 - 7));
         println("this is some text being printed");
         println(add(1,1));
         println();

@@ -43,6 +43,7 @@ impl Parser {
 
                     let call = self.parse_function_call_in_global_scope(name);
                     //println!("Added global {:?}", call.kind);
+                    self.require(TokenType::Semicolon);
                     global_block.exprs.push(call);
                 },
                 TokenType::Semicolon => self.consume(),
@@ -166,6 +167,12 @@ impl Parser {
                     return Expr::new(ExprKind::Reference(ident));
                 }
             },
+            TokenType::LeftParenthesis => {
+                self.require(TokenType::LeftParenthesis);
+                let expr = self.parse_outermost_expr();
+                self.require(TokenType::RightParenthesis);
+                return expr;
+            }
             _ => panic!(
                 "oh no, unknown token {:?} not parsable as expr",
                 self.buffer[0].typ

@@ -5,6 +5,7 @@ use std::rc::Rc;
 pub enum OperationCodes {
     Println,
     Add,
+    Subtract,
     Call,
     Push(Rc<Value>),
     Reference(String),

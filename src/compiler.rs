@@ -94,7 +94,7 @@ impl Compiler {
                         func.code.push(OperationCodes::Add);
                     },
                     BinaryOp::Subtraction => {
-                        unimplemented!();
+                        func.code.push(OperationCodes::Subtract);
                     },
                 }
             });

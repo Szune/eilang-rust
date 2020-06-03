@@ -121,6 +121,7 @@ impl Expr {
 
 #[derive(Debug)]
 pub enum ExprKind {
+    // TODO: extract enum variants to make this less confusing?
     Function(String, String, Vec<Ptr<(String,String)>>, Ptr<Block>),
     If(Ptr<Expr>, Ptr<Block>, Option<Ptr<Expr>>),
     IntConstant(i64),
