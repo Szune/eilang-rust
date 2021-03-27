@@ -152,17 +152,29 @@ impl Interpreter {
                     }
                 }
                 OpCodes::Equal => {
-                    Interpreter::OpCodeEqual(&mut stack, false);
+                    Interpreter::OpEqual(&mut stack, false);
                 }
                 OpCodes::NotEqual => {
-                    Interpreter::OpCodeEqual(&mut stack, true);
+                    Interpreter::OpEqual(&mut stack, true);
                 }
-                OpCodes::LessThan => {unimplemented!();}
-                OpCodes::GreaterThan => {unimplemented!();}
-                OpCodes::LessThanEquals => {unimplemented!();}
-                OpCodes::GreaterThanEquals => {unimplemented!();}
-                OpCodes::And => {unimplemented!();}
-                OpCodes::Or => {unimplemented!();}
+                OpCodes::LessThan => {
+                    Interpreter::OpLessThan(&mut stack);
+                }
+                OpCodes::GreaterThan => {
+                    Interpreter::OpGreaterThan(&mut stack);
+                }
+                OpCodes::LessThanEquals => {
+                    Interpreter::OpLessThanEquals(&mut stack);
+                }
+                OpCodes::GreaterThanEquals => {
+                    Interpreter::OpGreaterThanEquals(&mut stack);
+                }
+                OpCodes::And => {
+                    Interpreter::OpAnd(&mut stack);
+                }
+                OpCodes::Or => {
+                    Interpreter::OpOr(&mut stack);
+                }
             }
             if frames.is_empty() {
                 break;
@@ -177,7 +189,115 @@ impl Interpreter {
     }
 
     #[inline]
-    fn OpCodeEqual(stack: &mut Vec<Rc<Value>>, not: bool) {
+    fn OpAnd(stack: &mut Vec<Rc<Value>>) {
+        let right = stack.pop().unwrap();
+        let right = right.deref();
+        let left = stack.pop().unwrap();
+        let left = left.deref();
+
+        let result = match left {
+            Value::Bool(l) => match right {
+                Value::Bool(r) => *l && *r,
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        };
+
+        stack.push(Rc::new(Value::Bool(result)));
+    }
+
+    #[inline]
+    fn OpOr(stack: &mut Vec<Rc<Value>>) {
+        let right = stack.pop().unwrap();
+        let right = right.deref();
+        let left = stack.pop().unwrap();
+        let left = left.deref();
+
+        let result = match left {
+            Value::Bool(l) => match right {
+                Value::Bool(r) => *l || *r,
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        };
+
+        stack.push(Rc::new(Value::Bool(result)));
+    }
+
+    #[inline]
+    fn OpLessThan(stack: &mut Vec<Rc<Value>>) {
+        let right = stack.pop().unwrap();
+        let right = right.deref();
+        let left = stack.pop().unwrap();
+        let left = left.deref();
+
+        let result = match left {
+            Value::Integer(l) => match right {
+                Value::Integer(r) => l < r,
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        };
+
+        stack.push(Rc::new(Value::Bool(result)));
+    }
+
+    #[inline]
+    fn OpGreaterThan(stack: &mut Vec<Rc<Value>>) {
+        let right = stack.pop().unwrap();
+        let right = right.deref();
+        let left = stack.pop().unwrap();
+        let left = left.deref();
+
+        let result = match left {
+            Value::Integer(l) => match right {
+                Value::Integer(r) => l > r,
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        };
+
+        stack.push(Rc::new(Value::Bool(result)));
+    }
+
+    #[inline]
+    fn OpLessThanEquals(stack: &mut Vec<Rc<Value>>) {
+        let right = stack.pop().unwrap();
+        let right = right.deref();
+        let left = stack.pop().unwrap();
+        let left = left.deref();
+
+        let result = match left {
+            Value::Integer(l) => match right {
+                Value::Integer(r) => l <= r,
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        };
+
+        stack.push(Rc::new(Value::Bool(result)));
+    }
+
+    #[inline]
+    fn OpGreaterThanEquals(stack: &mut Vec<Rc<Value>>) {
+        let right = stack.pop().unwrap();
+        let right = right.deref();
+        let left = stack.pop().unwrap();
+        let left = left.deref();
+
+        let result = match left {
+            Value::Integer(l) => match right {
+                Value::Integer(r) => l >= r,
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        };
+
+        stack.push(Rc::new(Value::Bool(result)));
+    }
+
+    #[inline]
+    fn OpEqual(stack: &mut Vec<Rc<Value>>, not: bool) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();

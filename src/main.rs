@@ -64,6 +64,34 @@ fn main() {
         if 5 == 5 {
             println("5 == 5 is true");
         }
+
+        if 4 > 5 {
+            println("there's a bug (4 > 5)");
+        }
+
+        if 5 < 4 {
+            println("there's a bug (5 < 4)");
+        }
+
+        if 5 > 4 {
+            println("5 > 4");
+        }
+
+        if 4 < 5 {
+            println("4 < 5");
+        }
+
+        if 201 >= 200 && 201 >= 201 {
+            println("201 >= 200 && 201 >= 201");
+        }
+
+        if 201 <= 201 && 200 <= 201 {
+            println("201 <= 201 && 200 <= 201");
+        }
+
+        if 10 > 5 || 5 > 10 {
+            println("10 > 5 || 5 > 10");
+        }
         "#)); // "fn add() -> int { return 5 + 10; }"
     let ast = Parser::parse(lexer_for_parser);
     //println!("Parsed AST: {:#?}", ast);
