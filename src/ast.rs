@@ -43,6 +43,7 @@ impl Block {
 pub struct Expr {
     pub kind: ExprKind,
 }
+
 impl Expr {
     pub fn new(kind: ExprKind) -> Expr {
         Expr {
@@ -55,30 +56,8 @@ impl Expr {
             ExprKind::Function(_, _, _, _) => {
                 //println!("visiting function {}", name.clone());
                 compiler.visit_function(&self.kind);
-            },
-            ExprKind::If(_, _, _) => {
-
-            },
-            ExprKind::IntConstant(_) => {
-
-            },
-            ExprKind::StringConstant(_) => {
-
-            },
-            ExprKind::Return(_) => {
-
-            },
-            ExprKind::Reference(_) => {
-
-            },
-            ExprKind::BinaryOp(_, _, _) => {
-
-            },
-            ExprKind::FunctionCall(_, _) => {
-                // rewrite to make every expression in the global scope be part of a single global function, like always?
-                // i think yessu
-                //println!("visiting function call in global scope");
-            },
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -87,34 +66,36 @@ impl Expr {
             ExprKind::Function(_, _, _, _) => {
                 //println!("visiting function in function {}", name.clone());
                 unimplemented!("function in function");
-            },
+            }
             ExprKind::If(_, _, _) => {
-
-            },
+                compiler.visit_if(&self.kind, f);
+            }
+            ExprKind::Comparison(_, _, _) => {
+                compiler.visit_comparison(&self.kind, f);
+            }
             ExprKind::IntConstant(_) => {
                 //println!("int constant");
                 compiler.visit_int_constant(&self.kind, f);
-            },
+            }
             ExprKind::StringConstant(_) => {
                 //println!("int constant");
                 compiler.visit_string_constant(&self.kind, f);
-            },
+            }
             ExprKind::Return(_) => {
                 //println!("visiting return in function");
                 compiler.visit_return(&self.kind, f);
-            },
+            }
             ExprKind::Reference(_) => {
                 //println!("visiting reference in function");
                 compiler.visit_reference(&self.kind, f);
-            },
+            }
             ExprKind::BinaryOp(_, _, _) => {
                 compiler.visit_binary_op(&self.kind, f);
-
-            },
+            }
             ExprKind::FunctionCall(_, _) => {
                 //println!("visiting function call in function");
                 compiler.visit_function_call(&self.kind, f);
-            },
+            }
         }
     }
 }
@@ -122,14 +103,27 @@ impl Expr {
 #[derive(Debug)]
 pub enum ExprKind {
     // TODO: extract enum variants to make this less confusing?
-    Function(String, String, Vec<Ptr<(String,String)>>, Ptr<Block>),
-    If(Ptr<Expr>, Ptr<Block>, Option<Ptr<Expr>>),
+    Function(String, String, Vec<Ptr<(String, String)>>, Ptr<Block>),
+    If(Ptr<Expr>, Ptr<Block>, Option<Ptr<Block>>),
     IntConstant(i64),
     StringConstant(String),
     Return(Option<Ptr<Expr>>),
     Reference(String),
+    Comparison(Ptr<Expr>, Ptr<Expr>, Comparison),
     BinaryOp(Ptr<Expr>, Ptr<Expr>, BinaryOp),
     FunctionCall(String, Vec<Ptr<Expr>>),
+}
+
+#[derive(Debug)]
+pub enum Comparison {
+    Equals,
+    NotEquals,
+    LessThan,
+    GreaterThan,
+    LessThanEquals,
+    GreaterThanEquals,
+    And,
+    Or,
 }
 
 #[derive(Debug)]

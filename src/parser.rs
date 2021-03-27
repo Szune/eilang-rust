@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, Block, Expr, ExprKind, Ptr, Root};
+use crate::ast::*;
 use crate::lexer::Lexer;
 use crate::token::*;
 
@@ -28,26 +28,17 @@ impl Parser {
     fn parse_global_scope(&mut self) {
         let mut global_block = Block::new();
         while !self.is_token(TokenType::EndOfText) {
-            match self.buffer[0].typ {
+            match &self.buffer[0].typ {
                 TokenType::Function => {
                     let func = self.parse_global_function();
                     //println!("Added global {:?}", func.kind);
                     self.root.functions.push(func);
-                },
-                TokenType::Identifier => {
-                    let name = self.parse_full_identifier();
-                    if !self.is_token(TokenType::LeftParenthesis) {
-                        // just to simply for now, only allow function calls in global scope
-                        panic!("only function calls are allowed as expressions in global scope, you doofus :)");
-                    }
-
-                    let call = self.parse_function_call_in_global_scope(name);
-                    //println!("Added global {:?}", call.kind);
-                    self.require(TokenType::Semicolon);
-                    global_block.exprs.push(call);
-                },
+                }
                 TokenType::Semicolon => self.consume(),
-                _ => panic!("I DON'T KNOW WHAT {:?} IS", &self.buffer[0]),
+                _ => {
+                    let expr = self.parse_root_expr();
+                    global_block.exprs.push(expr);
+                }
             };
         }
         global_block.exprs.push(Expr::new(ExprKind::Return(None)));
@@ -62,11 +53,11 @@ impl Parser {
 
     fn parse_global_function(&mut self) -> Expr {
         self.require(TokenType::Function);
-        let ident = self.require_and_return(TokenType::Identifier);
+        let ident = self.parse_full_identifier();
         //println!("function identifier: {}", ident.string.clone().unwrap());
         let parameters = self.parse_parameter_list();
         self.require(TokenType::Arrow);
-        let return_type = self.require_and_return(TokenType::Identifier);
+        let return_type = self.parse_full_identifier();
         /*println!(
             "function ident: '{}', function return type: '{}'",
             ident.string.clone().unwrap(),
@@ -74,8 +65,8 @@ impl Parser {
         );*/
         let block = self.parse_block();
         return Expr::new(ExprKind::Function(
-            ident.string.unwrap(),
-            return_type.string.unwrap(),
+            ident,
+            return_type,
             parameters,
             block,
         ));
@@ -101,20 +92,99 @@ impl Parser {
                     self.consume();
                     return Expr::new(ExprKind::Return(None));
                 }
-                let expr = self.parse_outermost_expr();
+                let expr = self.parse_or();
                 self.require(TokenType::Semicolon);
                 return Expr::new(ExprKind::Return(Some(Ptr(expr))));
             }
+            TokenType::If => {
+                self.consume();
+                let if_expr = self.parse_or();
+                let true_block = self.parse_block();
+                let else_block =
+                    match self.buffer[0].typ {
+                        TokenType::Else => Some(self.parse_block()),
+                        _ => None,
+                    };
+
+                return Expr::new(ExprKind::If(Ptr(if_expr), true_block, else_block));
+            }
+            TokenType::Identifier(_) => {
+                let expr = self.parse_outermost_expr();
+                self.require(TokenType::Semicolon);
+                expr
+            },
             _ => {
                 let expr = self.parse_outermost_expr();
-                return expr;
+                expr
             }
         }
     }
 
+    fn parse_or(&mut self) -> Expr {
+        let mut expr = self.parse_and();
+        while matches!(self.buffer[0].typ, TokenType::Or) {
+            self.consume();
+            let right = self.parse_and();
+            expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::Or))
+        }
+        expr
+    }
+
+    fn parse_and(&mut self) -> Expr {
+        let mut expr = self.parse_equality_comparisons();
+        while matches!(self.buffer[0].typ, TokenType::And) {
+            self.consume();
+            let right = self.parse_equality_comparisons();
+            expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::And))
+        }
+        expr
+    }
+
+    fn parse_equality_comparisons(&mut self) -> Expr {
+        let mut expr = self.parse_difference_comparisons();
+        while matches!(self.buffer[0].typ, TokenType::EqualsEquals | TokenType::NotEquals) {
+            if self.is_token(TokenType::EqualsEquals) {
+                self.consume();
+                let right = self.parse_difference_comparisons();
+                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::Equals))
+            } else if self.is_token(TokenType::NotEquals) {
+                self.consume();
+                let right = self.parse_difference_comparisons();
+                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::NotEquals))
+            }
+        }
+        expr
+    }
+
+    fn parse_difference_comparisons(&mut self) -> Expr {
+        let mut expr = self.parse_outermost_expr();
+
+        while matches!(self.buffer[0].typ,
+         TokenType::LessThan | TokenType::GreaterThan | TokenType::LessThanEquals | TokenType::GreaterThanEquals) {
+            if self.is_token(TokenType::LessThan) {
+                self.consume();
+                let right = self.parse_outermost_expr();
+                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::LessThan))
+            } else if self.is_token(TokenType::GreaterThan) {
+                self.consume();
+                let right = self.parse_outermost_expr();
+                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::GreaterThan))
+            } else if self.is_token(TokenType::LessThanEquals) {
+                self.consume();
+                let right = self.parse_outermost_expr();
+                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::LessThanEquals))
+            } else if self.is_token(TokenType::GreaterThanEquals) {
+                self.consume();
+                let right = self.parse_outermost_expr();
+                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::GreaterThanEquals))
+            }
+        }
+        expr
+    }
+
     /// e.g. binary ops, etc
     fn parse_outermost_expr(&mut self) -> Expr {
-        return self.parse_binary_ops_1();
+        self.parse_binary_ops_1()
     }
 
     fn parse_binary_ops_1(&mut self) -> Expr {
@@ -138,7 +208,7 @@ impl Parser {
                 ));
             }
         }
-        return expr;
+        expr
     }
 
     fn parse_binary_ops_2(&mut self) -> Expr {
@@ -154,19 +224,25 @@ impl Parser {
 
     /// e.g. references, constants, etc
     fn parse_innermost_expr(&mut self) -> Expr {
-        return match self.buffer[0].typ {
-            TokenType::Integer => Expr::new(ExprKind::IntConstant(
-                self.consume_and_return().integer.unwrap(),
-            )),
-            TokenType::String => Expr::new(ExprKind::StringConstant(self.consume_and_return().string.unwrap())),
-            TokenType::Identifier => {
+        return match &self.buffer[0].typ {
+            TokenType::Integer(val) => {
+                let expr = Expr::new(ExprKind::IntConstant(*val));
+                self.consume();
+                expr
+            }
+            TokenType::String(val) => {
+                let expr = Expr::new(ExprKind::StringConstant(val.clone()));
+                self.consume();
+                expr
+            }
+            TokenType::Identifier(_) => {
                 let ident = self.parse_full_identifier();
                 if self.is_token(TokenType::LeftParenthesis) {
                     return self.parse_function_call(ident);
                 } else {
                     return Expr::new(ExprKind::Reference(ident));
                 }
-            },
+            }
             TokenType::LeftParenthesis => {
                 self.require(TokenType::LeftParenthesis);
                 let expr = self.parse_outermost_expr();
@@ -187,7 +263,7 @@ impl Parser {
 
     fn parse_argument_list(&mut self) -> Vec<Ptr<Expr>> {
         self.require(TokenType::LeftParenthesis);
-        let mut arguments : Vec<Ptr<Expr>> = Vec::new();
+        let mut arguments: Vec<Ptr<Expr>> = Vec::new();
         while !self.is_token(TokenType::RightParenthesis) && !self.is_token(TokenType::EndOfText) {
             let arg = self.parse_outermost_expr();
             arguments.push(Ptr(arg));
@@ -201,22 +277,29 @@ impl Parser {
 
     fn parse_full_identifier(&mut self) -> String {
         // TODO: use this for adding up namespaced identifiers later on
-        return self.consume_and_return().string.clone().unwrap();
+        match &self.buffer[0].typ {
+            TokenType::Identifier(val) => {
+                let ret = val.clone();
+                self.consume();
+                ret
+            }
+            t => panic!("expected identifier, was {:#?}", t)
+        }
     }
 
     fn parse_parameter_list(&mut self) -> Vec<Ptr<(String, String)>> {
         self.require(TokenType::LeftParenthesis);
         let mut params: Vec<Ptr<(String, String)>> = Vec::new();
         while !self.is_token(TokenType::RightParenthesis) && !self.is_token(TokenType::EndOfText) {
-            let ident = self.require_and_return(TokenType::Identifier);
+            let ident = self.parse_full_identifier();
             self.require(TokenType::Colon);
-            let typ = self.require_and_return(TokenType::Identifier);
+            let typ = self.parse_full_identifier();
             /*println!(
                 "[found arg] {}: {}",
                 ident.string.clone().unwrap(),
                 typ.string.clone().unwrap()
             );*/
-            params.push(Ptr((ident.string.unwrap(), typ.string.unwrap())));
+            params.push(Ptr((ident, typ)));
             if self.is_token(TokenType::Comma) {
                 self.consume();
             }

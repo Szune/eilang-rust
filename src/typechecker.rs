@@ -6,7 +6,9 @@ use std::rc::Rc;
 pub struct TypeChecker {
     result: TypeCheckerResult,
 }
+// TODO: rewrite the typechecker now that you have a bit more experience with rust
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq)]
 pub enum TypeKind {
     BuiltIn_int,
@@ -18,7 +20,7 @@ pub enum TypeKind {
 }
 
 #[derive(Debug)]
-pub struct MaybeTCType {
+pub struct MaybeTCType { // should remove this and just use a Result<Rc<TCType>, String> (not entirely sure about the type arguments tbh)
     typ: Option<Rc<TCType>>,
     error: Option<String>,
 }
@@ -125,6 +127,7 @@ impl TypeChecker {
         match &expr.kind {
             ExprKind::Function(_, _, _, _) => unimplemented!("nested functions"),
             ExprKind::If(_, _, _) => {}
+            ExprKind::Comparison(_,_,_) => {}
             ExprKind::IntConstant(_) => {}
             ExprKind::StringConstant(_) => {}
             ExprKind::Return(ret_expr) => {
@@ -185,6 +188,7 @@ impl TypeChecker {
                     /* This is type checking ARGUMENTS being used in a function call against the function declaration */
                     ExprKind::Function(_, _, _, _) => {}
                     ExprKind::If(_, _, _) => {}
+                    ExprKind::Comparison(_,_,_) => {}
                     ExprKind::IntConstant(_) => {
                         // TODO: store more metadata to show better error messages, like line number and the actual text on the line, highlighting the span where the error happens
                         let tctype = types.get("int").unwrap();
@@ -230,12 +234,16 @@ impl TypeChecker {
 
     fn get_first_expr_type(&mut self, expr: &Expr, types: &HashMap<String, Rc<TCType>>, functions: &HashMap<String, TCFunction>, in_function: &TCFunction) -> MaybeTCType {
         match &expr.kind {
-            ExprKind::Function(name, _, _, _) => {
+            ExprKind::Function(_, _, _, _) => {
                 // function definition isn't an expression (for now at least)
                 return MaybeTCType::err("Function".to_string())
                 //return Rc::clone(types.get("void").unwrap());
             }
             ExprKind::If(_, _, _) => {
+                // at least for now
+                return MaybeTCType::ok(Rc::clone(types.get("void").unwrap()));
+            }
+            ExprKind::Comparison(_,_,_) => {
                 // at least for now
                 return MaybeTCType::ok(Rc::clone(types.get("void").unwrap()));
             }
@@ -359,7 +367,7 @@ impl TypeChecker {
         }
     }
 
-    fn build_types(&mut self, ast: &Root) -> HashMap<String, Rc<TCType>> {
+    fn build_types(&mut self, _ast: &Root) -> HashMap<String, Rc<TCType>> {
         let mut types = HashMap::new();
         types.insert("any".into(), Rc::new(TCType {
             name: "any".into(),

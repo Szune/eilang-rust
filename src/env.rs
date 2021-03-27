@@ -1,7 +1,7 @@
 use crate::function::Function;
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::ops::OperationCodes;
+use crate::ops::OpCodes;
 use crate::ast::Ptr;
 
 pub struct Env {
@@ -16,8 +16,8 @@ impl Env {
         let mut println = Function::new("println".into(),
                                     "void".into(),
                                     &Vec::<Ptr<(String, String)>>::new());
-        println.code.push(OperationCodes::Println);
-        println.code.push(OperationCodes::Return);
+        println.code.push(OpCodes::Println);
+        println.code.push(OpCodes::Return);
         env.add_function("println".into(),
                          println);
         return env;

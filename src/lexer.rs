@@ -3,6 +3,15 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::convert::TryFrom;
 
+macro_rules! keywords (
+    ($($str:expr => $token:expr),*) => {
+        [
+            $(
+                (String::from($str), $token),
+            )*
+        ]
+    }
+);
 
 pub struct Lexer {
     // TODO: could wrap the mutable parts in a mutable wrapper, but meh.. maybe later
@@ -24,14 +33,15 @@ impl Lexer {
             line: 0,
             col: 0,
             eof: false,
-            keywords: [
-                (String::from("fn"), TokenType::Function),
-                (String::from("if"), TokenType::If),
-                (String::from("return"), TokenType::Return),
+            keywords: keywords! [
+                "fn" => TokenType::Function,
+                "if" => TokenType::If,
+                "else" => TokenType::Else,
+                "return" => TokenType::Return
             ]
-                .iter()
-                .cloned()
-                .collect(),
+            .iter()
+            .cloned()
+            .collect(),
         };
         lexer.consume();
         lexer.consume();
@@ -40,29 +50,71 @@ impl Lexer {
 
     pub fn next_token(&mut self) -> Token {
         if self.eof {
-            return Token(TokenType::EndOfText);
+            return Token::new(TokenType::EndOfText);
         }
         let mut tok = Token::empty();
         while tok.typ == TokenType::None && !self.eof {
             match self.buffer[0] {
                 '\n' | ' ' => (),
-                '(' => tok = Token(TokenType::LeftParenthesis),
-                ')' => tok = Token(TokenType::RightParenthesis),
-                ',' => tok = Token(TokenType::Comma),
-                '.' => tok = Token(TokenType::Dot),
-                '{' => tok = Token(TokenType::LeftBrace),
-                '}' => tok = Token(TokenType::RightBrace),
-                '[' => tok = Token(TokenType::LeftBracket),
-                ']' => tok = Token(TokenType::RightBracket),
+                '(' => tok = Token::new(TokenType::LeftParenthesis),
+                ')' => tok = Token::new(TokenType::RightParenthesis),
+                ',' => tok = Token::new(TokenType::Comma),
+                '.' => tok = Token::new(TokenType::Dot),
+                '{' => tok = Token::new(TokenType::LeftBrace),
+                '}' => tok = Token::new(TokenType::RightBrace),
+                '[' => tok = Token::new(TokenType::LeftBracket),
+                ']' => tok = Token::new(TokenType::RightBracket),
                 ':' => match self.buffer[1] {
-                    ':' => tok = Token(TokenType::DoubleColon),
-                    _ => tok = Token(TokenType::Colon),
+                    ':' => {
+                        tok = Token::new(TokenType::DoubleColon);
+                        self.consume();
+                    },
+                    _ => tok = Token::new(TokenType::Colon),
                 },
-                ';' => tok = Token(TokenType::Semicolon),
-                '<' => tok = Token(TokenType::LessThan),
-                '>' => tok = Token(TokenType::GreaterThan),
-                '=' => tok = Token(TokenType::Equals),
-                '*' => tok = Token(TokenType::Asterisk),
+                ';' => tok = Token::new(TokenType::Semicolon),
+                '<' => match self.buffer[1] {
+                    '=' => {
+                        tok = Token::new(TokenType::LessThanEquals);
+                        self.consume();
+                    },
+                    _ => tok = Token::new(TokenType::LessThan),
+                }
+                '>' => match self.buffer[1] {
+                    '=' => {
+                        tok = Token::new(TokenType::GreaterThanEquals);
+                        self.consume();
+                    },
+                    _ => tok = Token::new(TokenType::GreaterThan),
+                }
+                '&' => match self.buffer[1] {
+                    '&' => {
+                        tok = Token::new(TokenType::And);
+                        self.consume();
+                    },
+                    _ => panic!("binary and op '&' not implemented"),
+                },
+                '|' => match self.buffer[1] {
+                    '|' => {
+                        tok = Token::new(TokenType::Or);
+                        self.consume();
+                    },
+                    _ => panic!("binary or op '|' not implemented"),
+                },
+                '!' => match self.buffer[1] {
+                    '=' => {
+                        tok = Token::new(TokenType::NotEquals);
+                        self.consume();
+                    },
+                    _ => panic!("unary not '!' not implemented"),
+                },
+                '=' => match self.buffer[1] {
+                    '=' => {
+                        tok = Token::new(TokenType::EqualsEquals);
+                        self.consume();
+                    },
+                    _ => tok = Token::new(TokenType::Equals),
+                }
+                '*' => tok = Token::new(TokenType::Asterisk),
                 '/' => match self.buffer[1] {
                     '/' => {
                         while self.buffer[0] != '\n' && !self.eof {
@@ -75,25 +127,28 @@ impl Lexer {
                         }
                         self.consume(); // consume last '/'
                     },
-                    _ => tok = Token(TokenType::Slash),
+                    _ => tok = Token::new(TokenType::Slash),
                 },
-                '+' => tok = Token(TokenType::Plus),
+                '+' => tok = Token::new(TokenType::Plus),
                 '-' => match self.buffer[1] {
                     '0' ..= '9' => return self.get_number(),
                     '>' => {
                         self.consume();
-                        tok = Token(TokenType::Arrow)
+                        tok = Token::new(TokenType::Arrow)
                     },
-                    _ => tok = Token(TokenType::Dash),
+                    _ => tok = Token::new(TokenType::Dash),
                 }
                 ,
                 '0' ..= '9' => return self.get_number(),
                 '"' => return self.get_string(),
                 'A' ..= 'Z' | 'a' ..= 'z' | '_' => return self.get_identifier_or_keyword(),
-                _ => tok = Token::with_string(TokenType::Unknown, String::from(format!("b[0] = {} --- b[1] = {}", self.buffer[0], self.buffer[1]))),
+                _ => tok = Token::unknown(String::from(format!("b[0] = {} --- b[1] = {}", self.buffer[0], self.buffer[1]))),
             };
 
             self.consume();
+            if self.eof {
+                return Token::new(TokenType::EndOfText);
+            }
         }
         return tok;
     }
@@ -108,7 +163,7 @@ impl Lexer {
         }
         let n = String::from_iter(sb).parse::<i64>();
 
-        return Token::with_integer(TokenType::Integer, n.unwrap());
+        return Token::integer(n.unwrap());
     }
 
     fn get_identifier_or_keyword(&mut self) -> Token {
@@ -125,8 +180,8 @@ impl Lexer {
         }
         let s = String::from_iter(sb);
         return match self.keywords.get(&s) {
-            Some(kw) => Token(kw.clone()),
-            None => Token::with_string(TokenType::Identifier, s),
+            Some(kw) => Token::new(kw.clone()),
+            None => Token::ident( s),
         };
     }
 
@@ -134,7 +189,7 @@ impl Lexer {
         self.consume(); // skip "
         if self.buffer[0] == '"' {
             self.consume(); // skip "
-            return Token::with_string(TokenType::String, String::from(""));
+            return Token::string(String::from(""));
         }
 
         let mut sb = Vec::new();
@@ -164,7 +219,7 @@ impl Lexer {
             self.consume();
         }
         self.consume(); // consume last "
-        return Token::with_string(TokenType::String, String::from_iter(sb));
+        return Token::string(String::from_iter(sb));
     }
 
     pub fn print_lex(&mut self) {

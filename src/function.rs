@@ -1,4 +1,4 @@
-use crate::ops::OperationCodes;
+use crate::ops::OpCodes;
 use crate::ast::Ptr;
 
 #[derive(Debug)]
@@ -6,7 +6,7 @@ pub struct Function {
     pub name: String,
     pub return_type: String,
     pub arguments: Vec<(String,String)>,
-    pub code: Vec<OperationCodes>,
+    pub code: Vec<OpCodes>,
 
 }
 

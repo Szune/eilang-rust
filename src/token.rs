@@ -1,58 +1,51 @@
 #[derive(Debug, Clone)]
 pub struct Token {
     pub typ: TokenType,
-    pub string: Option<String>,
-    pub integer: Option<i64>,
-    pub double: Option<f64>,
 }
 
-
-#[allow(non_snake_case)]
-pub fn Token(typ: TokenType) -> Token {
-    Token {
-        typ,
-        string: None,
-        integer: None,
-        double: None,
-    }
-}
 
 const _EMPTY: Token = Token { // TODO: I'm not sure this does what I intend, look up static/const and determine how to make sure there's only one shared immutable reference to this instance, if I understand this correctly it'll just create a copy for every call anyway..
     typ: TokenType::None,
-    string: None,
-    integer: None,
-    double: None,
 };
 
 impl Token {
+    pub fn new(typ: TokenType) -> Token {
+        Token {
+            typ,
+        }
+    }
+
     pub fn empty() -> Token {
         return _EMPTY;
     }
 
-    pub fn with_string(typ: TokenType, value: String) -> Token {
+    pub fn ident(value: String) -> Token {
         Token {
-            typ,
-            string: Some(value),
-            integer: None,
-            double: None,
+            typ: TokenType::Identifier(value),
         }
     }
 
-    pub fn with_integer(typ: TokenType, value: i64) -> Token {
+    pub fn string(value: String) -> Token {
         Token {
-            typ,
-            string: None,
-            integer: Some(value),
-            double: None,
+            typ: TokenType::String(value),
         }
     }
 
-    pub fn with_double(typ: TokenType, value: f64) -> Token {
+    pub fn integer(value: i64) -> Token {
         Token {
-            typ,
-            string: None,
-            integer: None,
-            double: Some(value),
+            typ: TokenType::Integer(value),
+        }
+    }
+
+    pub fn double(value: f64) -> Token {
+        Token {
+            typ: TokenType::Double(value),
+        }
+    }
+
+    pub fn unknown(value: String) -> Token {
+        Token {
+            typ: TokenType::Unknown(value),
         }
     }
 
@@ -65,12 +58,13 @@ impl Token {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     None,
-    Unknown,
-    Identifier,
+    Unknown(String),
+    Identifier(String),
     EndOfText,
     /* Start Keywords */
     Function,
     If,
+    Else,
     Return,
     /* Start Symbols */
     Comma,
@@ -82,7 +76,13 @@ pub enum TokenType {
     Semicolon,
     LessThan,
     GreaterThan,
+    LessThanEquals,
+    GreaterThanEquals,
     Equals,
+    EqualsEquals,
+    NotEquals,
+    And,
+    Or,
     Asterisk,
     Slash,
     Arrow,
@@ -93,7 +93,7 @@ pub enum TokenType {
     LeftBracket,
     RightBracket,
     /* Start types */
-    String,
-    Integer,
-    Double,
+    String(String),
+    Integer(i64),
+    Double(f64),
 }

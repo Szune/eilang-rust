@@ -15,12 +15,15 @@ use parser::Parser;
 use compiler::Compiler;
 use interpreter::Interpreter;
 use typechecker::TypeChecker;
+use std::borrow::Borrow;
 
 fn main() {
     // implement different types of chars for different encodings? or just one 'char'
     // that deals with everything as regular bytes?
     let lexer_for_parser = Lexer::new(String::from(
-        r#"fn add(x: int, y: int) -> int { return x + y; }
+        r#"
+        /*
+        fn add(x: int, y: int) -> int { return x + y; }
         fn a_2(x: int) -> int { return x + 1359; }
         fn poutine(x: string) -> string { return x + "yeppo"; }
         fn im_void() -> any { return "Hello"; }
@@ -31,25 +34,38 @@ fn main() {
         //println(add("hej" + 5,9));
         //println(add("0" + s,9));
         println(a_2(195));
+        */
         /*
         println(a_2("hel"));
         println(add("hel"));
         println(add("hel", 0));
         */
+        /*
         println(add(10 - 7, 5 - 7));
         println("subraction: " + (10 - 7));
         println("this is some text being printed");
         println(add(1,1));
         println();
-        println(5);"#)); // "fn add() -> int { return 5 + 10; }"
+        println(5);
+        */
+        println(5);
+        if 5 == 4 {
+            println("should not reach this part");
+        }
+        if 5 == 5 {
+            println("5 == 5 is true");
+        }
+        "#)); // "fn add() -> int { return 5 + 10; }"
     let ast = Parser::parse(lexer_for_parser);
-    //println!("Parsed AST: {:?}", ast);
+    //println!("Parsed AST: {:#?}", ast);
     let result = TypeChecker::check(&ast);
     if !result.success.get() {
         println!("Type checker result: {}\n{}", result.success.get(), result.errors.borrow_mut().join("\n"));
         return;
     }
+    //println!("Compiling");
     let env = Compiler::compile(ast);
     //println!("{:?}", env.get_function(".main".into()).code);
+    //println!("Running");
     Interpreter::interpret(env);
 }

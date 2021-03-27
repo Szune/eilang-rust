@@ -1,6 +1,6 @@
-use crate::ast::{Root, Expr, ExprKind, ExprKind::*, BinaryOp};
+use crate::ast::*;
 use crate::function::Function;
-use crate::ops::OperationCodes;
+use crate::ops::OpCodes;
 use crate::values::{Value};
 use std::convert::TryFrom;
 use crate::env::Env;
@@ -46,15 +46,69 @@ impl Compiler {
         }
     }
 
-    pub fn visit_function(&mut self, func: &ExprKind) {
+    pub fn visit_comparison(&mut self, cmp: &ExprKind, func: &mut Function) {
+        match cmp {
+            ExprKind::Comparison(left, right, comparison) => {
+                left.ptr.accept_in_function(self, func);
+                right.ptr.accept_in_function(self, func);
+                let op_code = match comparison {
+                    Comparison::Equals => OpCodes::Equal,
+                    Comparison::NotEquals => OpCodes::NotEqual,
+                    Comparison::LessThan => OpCodes::LessThan,
+                    Comparison::GreaterThan => OpCodes::GreaterThan,
+                    Comparison::LessThanEquals => OpCodes::LessThanEquals,
+                    Comparison::GreaterThanEquals => OpCodes::GreaterThanEquals,
+                    Comparison::And => OpCodes::And,
+                    Comparison::Or => OpCodes::Or,
+                };
+                func.code.push(op_code);
+            },
+            _ => unreachable!(),
+        }
+    }
 
-        qm!(func,
+    pub fn visit_if(&mut self, _if: &ExprKind, func: &mut Function) {
+        match _if {
+            ExprKind::If(ifExpr, trueBlock, elseBlock) => {
+                if let Some(el) = elseBlock {
+                    ifExpr.ptr.accept_in_function(self, func);
+                    let op_addr = func.code.len();
+                    for e in &trueBlock.ptr.exprs {
+                        e.accept_in_function(self, func);
+                    }
+
+                    let el_addr = func.code.len();
+                    // patch in branch op
+                    func.code.insert(op_addr, OpCodes::BranchIfFalse(el_addr));
+
+                    for e in &el.ptr.exprs {
+                        e.accept_in_function(self, func);
+                    }
+                }
+                else {
+                    ifExpr.ptr.accept_in_function(self, func);
+                    let op_addr = func.code.len();
+                    for e in &trueBlock.ptr.exprs {
+                        e.accept_in_function(self, func);
+                    }
+
+                    let end_block_addr = func.code.len();
+                    // patch in branch op
+                    func.code.insert(op_addr, OpCodes::BranchIfFalse(end_block_addr));
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn visit_function(&mut self, func: &ExprKind) {
+        match func {
             ExprKind::Function(name, return_type, parameters, block) => {
                 let mut f = Function::new(name.clone(), return_type.clone(),
                                           parameters);
                 //println!("Compiling function {}({:?}) -> {}", f.name, f.arguments, f.return_type);
                 for p in &f.arguments {
-                    f.code.push(OperationCodes::FunctionSetVar(p.0.clone()));
+                    f.code.push(OpCodes::FunctionSetVar(p.0.clone()));
                 }
                 let b = &block.ptr;
                 for e in &b.exprs {
@@ -65,7 +119,8 @@ impl Compiler {
                 self.env.add_function(f.name.clone(), f);
                 // TODO: add function to a list of compiled functions
             },
-        );
+            _ => unreachable!(),
+        }
     }
 
     pub fn visit_return(&mut self, ret: &ExprKind, func: &mut Function) {
@@ -74,11 +129,11 @@ impl Compiler {
                 let e = &expr.ptr;
                 //println!("Compiling return with expr: {:?}", e);
                 e.accept_in_function(self, func);
-                func.code.push(OperationCodes::Return);
+                func.code.push(OpCodes::Return);
             },
             ExprKind::Return(None) => {
                 //println!("Compiling empty return");
-                func.code.push(OperationCodes::Return);
+                func.code.push(OpCodes::Return);
             }
         );
     }
@@ -91,10 +146,10 @@ impl Compiler {
                 match typ {
                     BinaryOp::Addition => {
                         //println!("Compiling add op");
-                        func.code.push(OperationCodes::Add);
+                        func.code.push(OpCodes::Add);
                     },
                     BinaryOp::Subtraction => {
-                        func.code.push(OperationCodes::Subtract);
+                        func.code.push(OpCodes::Subtract);
                     },
                 }
             });
@@ -102,22 +157,22 @@ impl Compiler {
 
     pub fn visit_reference(&mut self, reference: &ExprKind, func: &mut Function) {
         qm!(reference,
-            Reference(str) => {
+            ExprKind::Reference(str) => {
                 //println!("Compiling reference to {}", str);
-                func.code.push(OperationCodes::Reference(str.clone()));
+                func.code.push(OpCodes::Reference(str.clone()));
             });
     }
 
     pub fn visit_function_call(&mut self, fc: &ExprKind, func: &mut Function) {
         qm!(fc,
-            FunctionCall(name, args) => {
+            ExprKind::FunctionCall(name, args) => {
                 //println!("Compiling function call {}, {:?}", name, args);
                 for a in args.iter().rev() {
                     (*a.ptr).accept_in_function(self, func);
                 }
-                func.code.push(OperationCodes::Push(Rc::new(Value::int(i64::try_from(args.len()).unwrap()))));
-                func.code.push(OperationCodes::Push(Rc::new(Value::string(name.clone()))));
-                func.code.push(OperationCodes::Call);
+                func.code.push(OpCodes::Push(Rc::new(Value::int(i64::try_from(args.len()).unwrap()))));
+                func.code.push(OpCodes::Push(Rc::new(Value::string(name.clone()))));
+                func.code.push(OpCodes::Call);
                 // push args
                 // push arg count
                 // push name
@@ -127,16 +182,16 @@ impl Compiler {
 
     pub fn visit_int_constant(&mut self, i: &ExprKind, func: &mut Function) {
         qm!(i,
-            IntConstant(num) => {
-                func.code.push(OperationCodes::Push(Rc::new(Value::int(*num))));
+            ExprKind::IntConstant(num) => {
+                func.code.push(OpCodes::Push(Rc::new(Value::int(*num))));
         });
     }
 
 
     pub fn visit_string_constant(&mut self, s: &ExprKind, func: &mut Function) {
         qm!(s,
-            StringConstant(str) => {
-                func.code.push(OperationCodes::Push(Rc::new(Value::string(str.clone()))));
+            ExprKind::StringConstant(str) => {
+                func.code.push(OpCodes::Push(Rc::new(Value::string(str.clone()))));
         });
     }
 }

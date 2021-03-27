@@ -4,6 +4,7 @@ pub enum Value {
     Integer(i64),
     Double(f64),
     String(String),
+    Bool(bool),
 }
 
 const _VALUE : Value = Value::Empty;
