@@ -73,6 +73,7 @@ pub enum TokenType {
     Dash,
     Colon,
     DoubleColon,
+    Walrus,
     Semicolon,
     LessThan,
     GreaterThan,

@@ -49,8 +49,17 @@ fn main() {
         println(5);
         */
         println(5);
+        test := 3;
+        if test != 3 {
+            println("variable was not 3");
+        } else {
+            println("variable was 3");
+        }
+
         if 5 == 4 {
             println("should not reach this part");
+        } else {
+            println("should reach this part");
         }
         if 5 == 5 {
             println("5 == 5 is true");
@@ -65,7 +74,7 @@ fn main() {
     }
     //println!("Compiling");
     let env = Compiler::compile(ast);
-    //println!("{:?}", env.get_function(".main".into()).code);
+    //println!("{:#?}", env.get_function(".main".into()).code.iter().enumerate().collect::<Vec<(usize,&ops::OpCodes)>>());
     //println!("Running");
     Interpreter::interpret(env);
 }

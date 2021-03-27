@@ -96,6 +96,9 @@ impl Expr {
                 //println!("visiting function call in function");
                 compiler.visit_function_call(&self.kind, f);
             }
+            ExprKind::NewAssignment(_, _) => {
+                compiler.visit_new_assignment(&self.kind, f);
+            }
         }
     }
 }
@@ -104,6 +107,7 @@ impl Expr {
 pub enum ExprKind {
     // TODO: extract enum variants to make this less confusing?
     Function(String, String, Vec<Ptr<(String, String)>>, Ptr<Block>),
+    NewAssignment(String, Ptr<Expr>),
     If(Ptr<Expr>, Ptr<Block>, Option<Ptr<Block>>),
     IntConstant(i64),
     StringConstant(String),

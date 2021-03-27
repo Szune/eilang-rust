@@ -102,7 +102,10 @@ impl Parser {
                 let true_block = self.parse_block();
                 let else_block =
                     match self.buffer[0].typ {
-                        TokenType::Else => Some(self.parse_block()),
+                        TokenType::Else => {
+                            self.consume();
+                            Some(self.parse_block())
+                        },
                         _ => None,
                     };
 
@@ -157,25 +160,25 @@ impl Parser {
     }
 
     fn parse_difference_comparisons(&mut self) -> Expr {
-        let mut expr = self.parse_outermost_expr();
+        let mut expr = self.parse_binary_ops_1();
 
         while matches!(self.buffer[0].typ,
          TokenType::LessThan | TokenType::GreaterThan | TokenType::LessThanEquals | TokenType::GreaterThanEquals) {
             if self.is_token(TokenType::LessThan) {
                 self.consume();
-                let right = self.parse_outermost_expr();
+                let right = self.parse_binary_ops_1();
                 expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::LessThan))
             } else if self.is_token(TokenType::GreaterThan) {
                 self.consume();
-                let right = self.parse_outermost_expr();
+                let right = self.parse_binary_ops_1();
                 expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::GreaterThan))
             } else if self.is_token(TokenType::LessThanEquals) {
                 self.consume();
-                let right = self.parse_outermost_expr();
+                let right = self.parse_binary_ops_1();
                 expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::LessThanEquals))
             } else if self.is_token(TokenType::GreaterThanEquals) {
                 self.consume();
-                let right = self.parse_outermost_expr();
+                let right = self.parse_binary_ops_1();
                 expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::GreaterThanEquals))
             }
         }
@@ -184,7 +187,21 @@ impl Parser {
 
     /// e.g. binary ops, etc
     fn parse_outermost_expr(&mut self) -> Expr {
-        self.parse_binary_ops_1()
+        match (&self.buffer[0].typ, &self.buffer[1].typ) {
+            (TokenType::Identifier(_), TokenType::Walrus) => {
+                self.parse_new_assignment()
+            }
+            _ => {
+                self.parse_binary_ops_1()
+            }
+        }
+    }
+
+    fn parse_new_assignment(&mut self) -> Expr {
+        let ident = self.parse_full_identifier();
+        self.require(TokenType::Walrus);
+        let value = self.parse_or();
+        Expr::new(ExprKind::NewAssignment(ident,Ptr(value)))
     }
 
     fn parse_binary_ops_1(&mut self) -> Expr {
@@ -245,7 +262,7 @@ impl Parser {
             }
             TokenType::LeftParenthesis => {
                 self.require(TokenType::LeftParenthesis);
-                let expr = self.parse_outermost_expr();
+                let expr = self.parse_or();
                 self.require(TokenType::RightParenthesis);
                 return expr;
             }
@@ -265,7 +282,7 @@ impl Parser {
         self.require(TokenType::LeftParenthesis);
         let mut arguments: Vec<Ptr<Expr>> = Vec::new();
         while !self.is_token(TokenType::RightParenthesis) && !self.is_token(TokenType::EndOfText) {
-            let arg = self.parse_outermost_expr();
+            let arg = self.parse_or();
             arguments.push(Ptr(arg));
             if self.is_token(TokenType::Comma) {
                 self.consume();

@@ -162,7 +162,8 @@ impl TypeChecker {
             }
             ExprKind::Reference(_) => {}
             ExprKind::BinaryOp(_, _, _) => {}
-            ExprKind::FunctionCall(ident, args) => self.type_check_function_call(types, functions, in_function, ident, args)
+            ExprKind::FunctionCall(ident, args) => self.type_check_function_call(types, functions, in_function, ident, args),
+            ExprKind::NewAssignment(_, _) => {}
         };
     }
 
@@ -226,6 +227,7 @@ impl TypeChecker {
                             self.add_error(format!("Error: Wrong argument type '{}' for parameter '{}: {}' in call to function '{}'", &func.return_type.name, f.parameters[i].name, f.parameters[i].typ.name, f.name));
                         }
                     }
+                    ExprKind::NewAssignment(_, _) => {}
                 }
                 i += 1;
             }
@@ -273,6 +275,9 @@ impl TypeChecker {
                 } else {
                     MaybeTCType::ok(Rc::clone(types.get(func.unwrap().return_type.name.as_str()).unwrap()))
                 }
+            }
+            ExprKind::NewAssignment(_, _) => {
+                return MaybeTCType::ok(Rc::clone(types.get("void").unwrap()));
             }
         }
     }

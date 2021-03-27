@@ -60,6 +60,7 @@ impl Interpreter {
         while !frames.is_empty() {
             let frame = &mut frames.last().unwrap();
             let op = frame.func.code.get(frame.addr.get()).unwrap();
+            //println!("on addr {}", frame.addr.get());
             match op {
                 OpCodes::Add => {
                     Interpreter::OpCodeAdd(&mut stack)
@@ -111,7 +112,16 @@ impl Interpreter {
                     frames.pop();
                     scopes.pop();
                 },
-                OpCodes::SetVar => {},
+                OpCodes::SetVar => {
+                    let ident = stack.pop().unwrap();
+                    let value = stack.pop().unwrap();
+                    let ident = match ident.deref() {
+                        Value::String(s) => s,
+                        _ => unreachable!(),
+                    };
+                    let s = scopes.last_mut().unwrap();
+                    s.set_variable(ident.clone(), value);
+                },
                 OpCodes::Println => {
                     // argument count is popped in OperationCodes::Call, may need it later here though
                     if frame.called_with_arg_count < 1 {
@@ -129,11 +139,16 @@ impl Interpreter {
                     let s = scopes.last_mut().unwrap();
                     s.set_variable(n.clone(), value.unwrap());
                 },
+                OpCodes::Jump(addr) => {
+                    frame.addr.set(*addr);
+                    skip_inc = true;
+                },
                 OpCodes::BranchIfFalse(addr) => {
                     let brval = stack.pop().unwrap();
                     let brval = brval.deref();
                     if matches!(brval, Value::Bool(false)) {
                         frame.addr.set(*addr);
+                        skip_inc = true;
                     }
                 }
                 OpCodes::Equal => {
@@ -142,12 +157,12 @@ impl Interpreter {
                 OpCodes::NotEqual => {
                     Interpreter::OpCodeEqual(&mut stack, true);
                 }
-                OpCodes::LessThan => {}
-                OpCodes::GreaterThan => {}
-                OpCodes::LessThanEquals => {}
-                OpCodes::GreaterThanEquals => {}
-                OpCodes::And => {}
-                OpCodes::Or => {}
+                OpCodes::LessThan => {unimplemented!();}
+                OpCodes::GreaterThan => {unimplemented!();}
+                OpCodes::LessThanEquals => {unimplemented!();}
+                OpCodes::GreaterThanEquals => {unimplemented!();}
+                OpCodes::And => {unimplemented!();}
+                OpCodes::Or => {unimplemented!();}
             }
             if frames.is_empty() {
                 break;

@@ -67,6 +67,17 @@ impl Compiler {
         }
     }
 
+    pub fn visit_new_assignment(&mut self, assign: &ExprKind, func: &mut Function) {
+        match assign {
+            ExprKind::NewAssignment(ident, expr) => {
+                expr.ptr.accept_in_function(self, func);
+                func.code.push(OpCodes::Push(Rc::new(Value::String(ident.clone()))));
+                func.code.push(OpCodes::SetVar)
+            },
+            _ => unreachable!(),
+        }
+    }
+
     pub fn visit_if(&mut self, _if: &ExprKind, func: &mut Function) {
         match _if {
             ExprKind::If(ifExpr, trueBlock, elseBlock) => {
@@ -77,13 +88,20 @@ impl Compiler {
                         e.accept_in_function(self, func);
                     }
 
-                    let el_addr = func.code.len();
-                    // patch in branch op
-                    func.code.insert(op_addr, OpCodes::BranchIfFalse(el_addr));
+                    let true_block_end_jmp_addr = func.code.len() + 1; // + BranchIfFalse op
+
+                    let el_addr = func.code.len() + 2; // + BranchIfElse and Jump
 
                     for e in &el.ptr.exprs {
                         e.accept_in_function(self, func);
                     }
+
+                    // patch in branch op
+                    func.code.insert(op_addr, OpCodes::BranchIfFalse(el_addr));
+
+                    // patch in jump past else block at end of true block
+                    let end_block_addr = func.code.len() + 1;
+                    func.code.insert(true_block_end_jmp_addr, OpCodes::Jump(end_block_addr));
                 }
                 else {
                     ifExpr.ptr.accept_in_function(self, func);
@@ -92,7 +110,7 @@ impl Compiler {
                         e.accept_in_function(self, func);
                     }
 
-                    let end_block_addr = func.code.len();
+                    let end_block_addr = func.code.len() + 1;
                     // patch in branch op
                     func.code.insert(op_addr, OpCodes::BranchIfFalse(end_block_addr));
                 }

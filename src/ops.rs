@@ -7,8 +7,9 @@ pub enum OpCodes {
     Add,
     Subtract,
     Call,
-    // comparison stuff
+    Jump(usize),
     BranchIfFalse(usize),
+    // comparison stuff
     Equal,
     NotEqual,
     LessThan,

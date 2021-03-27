@@ -69,6 +69,10 @@ impl Lexer {
                         tok = Token::new(TokenType::DoubleColon);
                         self.consume();
                     },
+                    '=' => {
+                        tok = Token::new(TokenType::Walrus);
+                        self.consume();
+                    },
                     _ => tok = Token::new(TokenType::Colon),
                 },
                 ';' => tok = Token::new(TokenType::Semicolon),
