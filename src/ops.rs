@@ -9,6 +9,11 @@ pub enum OpCodes {
     Call,
     Jump(usize),
     BranchIfFalse(usize),
+    Push(Rc<Value>),
+    Reference(String),
+    Return,
+    SetVar,
+    FunctionSetVar(String),
     // comparison stuff
     Equal,
     NotEqual,
@@ -18,9 +23,4 @@ pub enum OpCodes {
     GreaterThanEquals,
     And,
     Or,
-    Push(Rc<Value>),
-    Reference(String),
-    Return,
-    SetVar,
-    FunctionSetVar(String),
 }

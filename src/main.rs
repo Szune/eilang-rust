@@ -1,5 +1,22 @@
-pub mod token; // define token as a public module
-pub mod lexer; // define lexer as a public module
+/*
+ * eilang is an experimental programming language, this is its compiler and interpreter.
+ * Copyright (C) 2021  Carl Erik Patrik Iwarson
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+pub mod token;
+pub mod lexer;
 pub mod parser;
 pub mod ast;
 pub mod compiler;
@@ -8,46 +25,22 @@ pub mod ops;
 pub mod function;
 pub mod env;
 pub mod interpreter;
+pub mod types;
 pub mod typechecker;
 
-use lexer::Lexer; // use Lexer struct, otherwise write lexer::Lexer
+use lexer::Lexer;
 use parser::Parser;
 use compiler::Compiler;
 use interpreter::Interpreter;
-use typechecker::TypeChecker;
-use std::borrow::Borrow;
 
 fn main() {
-    // implement different types of chars for different encodings? or just one 'char'
-    // that deals with everything as regular bytes?
+    // implement different types of chars for different encodings?
+    // or just one 'char' that deals with everything as regular bytes?
     let lexer_for_parser = Lexer::new(String::from(
         r#"
-        /*
         fn add(x: int, y: int) -> int { return x + y; }
-        fn a_2(x: int) -> int { return x + 1359; }
-        fn poutine(x: string) -> string { return x + "yeppo"; }
-        fn im_void() -> any { return "Hello"; }
-        fn add_int_to_str(i: int, s: string) -> string { return s + i; }
-        println(add_int_to_str(139, "this value is not pi "));
-        println(add(10, a_2(5)));
-        println(poutine("it is " + 5 + " "));
-        //println(add("hej" + 5,9));
-        //println(add("0" + s,9));
-        println(a_2(195));
-        */
-        /*
-        println(a_2("hel"));
-        println(add("hel"));
-        println(add("hel", 0));
-        */
-        /*
-        println(add(10 - 7, 5 - 7));
-        println("subraction: " + (10 - 7));
-        println("this is some text being printed");
-        println(add(1,1));
-        println();
-        println(5);
-        */
+
+        println("add: " + add(135,2));
         println(5);
         test := 3;
         if test != 3 {
@@ -92,17 +85,35 @@ fn main() {
         if 10 > 5 || 5 > 10 {
             println("10 > 5 || 5 > 10");
         }
+
+        if "test!" == "test!" {
+            println("\"test!\" == \"test!\"");
+        }
+        hello := "hello";
+        world := "world!";
+        println($"{hello} from {world}");
         "#)); // "fn add() -> int { return 5 + 10; }"
-    let ast = Parser::parse(lexer_for_parser);
+    let (mut ast, mut types) = Parser::parse(lexer_for_parser);
     //println!("Parsed AST: {:#?}", ast);
+    /*
     let result = TypeChecker::check(&ast);
     if !result.success.get() {
         println!("Type checker result: {}\n{}", result.success.get(), result.errors.borrow_mut().join("\n"));
         return;
     }
+    */
     //println!("Compiling");
-    let env = Compiler::compile(ast);
-    //println!("{:#?}", env.get_function(".main".into()).code.iter().enumerate().collect::<Vec<(usize,&ops::OpCodes)>>());
-    //println!("Running");
-    Interpreter::interpret(env);
+    //let (ast, success) = typechecker::check_types(ast, &mut types);
+    let typecheck = typechecker::check_types(&mut ast, &mut types);
+    match typecheck {
+        Ok(_) => {
+            let env = Compiler::compile(ast, types);
+            //println!("{:#?}", env.get_function(".main".into()).code.iter().enumerate().collect::<Vec<(usize,&ops::OpCodes)>>());
+            //println!("Running");
+            Interpreter::interpret(env);
+        }
+        Err(err) => {
+            panic!("Type checking failed: {}", err);
+        }
+    }
 }

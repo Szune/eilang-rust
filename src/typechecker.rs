@@ -1,469 +1,261 @@
-use crate::ast::{Root, ExprKind, Ptr, Expr, BinaryOp};
-use std::cell::{RefCell, Cell};
-use std::collections::HashMap;
-use std::rc::Rc;
+use crate::ast::{Root, ExprKind, Expr, FunctionExpr, Ptr, BinaryOp, Comparison, Block};
+use crate::types::{TypeCollector,Type};
+use std::ops::Deref;
 
-pub struct TypeChecker {
-    result: TypeCheckerResult,
-}
-// TODO: rewrite the typechecker now that you have a bit more experience with rust
-
-#[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq)]
-pub enum TypeKind {
-    BuiltIn_int,
-    BuiltIn_string,
-    BuiltIn_double,
-    BuiltIn_any,
-    BuiltIn_void,
-    User_class,
-}
-
-#[derive(Debug)]
-pub struct MaybeTCType { // should remove this and just use a Result<Rc<TCType>, String> (not entirely sure about the type arguments tbh)
-    typ: Option<Rc<TCType>>,
-    error: Option<String>,
-}
-
-impl MaybeTCType {
-    pub fn ok(typ: Rc<TCType>) -> MaybeTCType {
-        MaybeTCType {
-            typ: Some(typ),
-            error: None,
+fn determine_types<'a>(root: &'a mut Root, types: &'a mut TypeCollector) -> (&'a mut Root, &'a mut TypeCollector) {
+    macro_rules! assert_determined (
+        ($t:path) => {
+            if $t.is_indeterminate() {
+                panic!("Used undefined type {}", $t.name);
+            }
         }
-    }
-
-    pub fn err(err: String) -> MaybeTCType {
-        MaybeTCType {
-            typ: None,
-            error: Some(err),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct TCParameter {
-    name: String,
-    typ: Rc<TCType>,
-}
-
-#[derive(Debug)]
-pub struct TCType {
-    name: String,
-    kind: TypeKind,
-    base_type: Option<Ptr<TCFunction>>,
-}
-
-#[derive(Debug)]
-pub struct TCFunction {
-    name: String,
-    return_type: Rc<TCType>,
-    param_count: Option<usize>,
-    // None = "infinite" parameter count
-    parameters: Vec<TCParameter>,
-}
-
-pub struct TypeCheckerResult {
-    pub success: Cell<bool>,
-    pub errors: RefCell<Vec<String>>,
-}
-
-impl TypeCheckerResult {
-    pub fn new() -> TypeCheckerResult {
-        TypeCheckerResult {
-            success: true.into(),
-            errors: Vec::new().into(),
-        }
-    }
-}
-
-impl TypeChecker {
-    fn new() -> TypeChecker {
-        TypeChecker {
-            result: TypeCheckerResult::new()
-        }
-    }
-    pub fn check(ast: &Root) -> TypeCheckerResult {
-        let mut type_checker = TypeChecker::new();
-        let types = type_checker.build_types(ast);
-        let functions = type_checker.build_functions(ast, &types);
-        // TODO: build_references() <- write a function that builds all the references made in a function
-        // TODO: it should be run inside every loop of check_types that matches Function, and passed into that function
-        // TODO: also - maybe let parser figure out if the referenced variable/whatever exists at the point of referencing it
-        if functions.is_none() {
-            return type_checker.result;
-        }
-        type_checker.check_types(ast, types, functions.unwrap());
-        return type_checker.result;
-    }
-
-    fn add_error(&mut self, err: String) {
-        self.result.success.set(false);
-        self.result.errors.borrow_mut().push(err);
-    }
-
-    fn add_errors(&mut self, errs: RefCell<Vec<String>>) {
-        self.result.success.set(false);
-        self.result.errors.borrow_mut().append(&mut errs.borrow_mut());
-    }
-
-    fn check_types(&mut self, ast: &Root, types: HashMap<String, Rc<TCType>>, functions: HashMap<String, TCFunction>) {
-        for f in &ast.functions {
-            match &f.kind {
-                ExprKind::Function(name, _, _, code) => {
-                    let func = functions.get(name.as_str()).unwrap();
-                    println!("type checking function {}", name);
-                    let c = &(*code.ptr).exprs;
-                    for expr in c {
-                        self.check_expr_types(expr, &types, &functions, func);
+    );
+    // at this point, the parser should have defined all available types, so if a type cannot be found here,
+    // there's either an error in the parser, the eilang code, or there's a new feature or bug causing it
+    for f in root.functions.iter_mut() {
+        match &mut f.kind {
+            ExprKind::Function(ref mut fun) => {
+                if fun.return_type.is_indeterminate() {
+                    let return_type = types.get_type(&fun.return_type.name, &fun.return_type.scope);
+                    assert_determined!(return_type);
+                    fun.return_type = return_type;
+                }
+                for p in fun.parameters.iter_mut() {
+                    if p.ptr.deref().typ.is_indeterminate() {
+                        let new_type = types.get_type(&p.ptr.deref().typ.name, &p.ptr.deref().typ.scope);
+                        assert_determined!(new_type);
+                        p.ptr.typ = new_type;
                     }
                 }
-                _ => panic!("this shouldn't happen, at least not until classes have been implemented"),
+            }
+            _ => unreachable!()
+        }
+    }
+    // determine all indeterminate types
+    (root, types)
+}
+
+pub fn check_types(root: &mut Root, types: &mut TypeCollector) -> Result<(), String> {
+    let (root, types) = determine_types(root, types);
+
+    // TODO: if there's an indeterminate type at this point, panic!
+    for f in &root.functions {
+        match &f.kind {
+            ExprKind::Function(fun) => {
+                check_block(fun, &fun.code, root, types)?;
+            }
+            _ => unreachable!(),
+        }
+    }
+    Ok(())
+}
+
+fn check_block(func: &FunctionExpr, block: &Ptr<Block>, root: &Root, types: &TypeCollector) -> Result<(), String> {
+    for (i, expr) in block.ptr.exprs.iter().enumerate() {
+        check_expr(func, expr, i, root, types)?
+    }
+    Ok(())
+}
+
+fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, types: &TypeCollector) -> Result<(), String> {
+    match &expr.kind {
+        ExprKind::Return(r) =>
+            {
+                if let Some(r) = r {
+                    let returned_type = find_expr(func, &r, expr_index, root, types)?;
+                    if returned_type.id != func.return_type.id {
+                        return Err(format!("Tried to return item of type {:?} in function {} expecting return type {:?}", returned_type, func.name, func.return_type));
+                    }
+                }
+                Ok(())
+            }
+        ExprKind::Function(_) => Ok(()), // functions in functions are not implemented yet
+        ExprKind::NewAssignment(_, v) => {
+            check_expr(func, v.ptr.deref(), expr_index, root, types)?;
+            Ok(())
+        }
+        ExprKind::If(_if, v, e) => {
+            check_expr(func, _if.ptr.deref(), expr_index, root, types)?;
+            let if_type = find_expr(func, _if, expr_index, root, types)?;
+            if if_type.id != types.boolean().id {
+                return Err(format!("Cannot use {:?} in an if statement because it is not a bool value", if_type.name));
+            }
+
+            check_block(func, v, root, types)?;
+            if let Some(e) = e {
+                check_block(func, e, root, types)?;
+            }
+            Ok(())
+        }
+        ExprKind::IntConstant(_) => Ok(()), // int constant on its own can't have the wrong type
+        ExprKind::StringConstant(_) => Ok(()), // string constant on its own can't have the wrong type
+        ExprKind::Reference(_) => Ok(()),
+        ExprKind::Comparison(l, r, op) => {
+            check_expr(func, l.ptr.deref(), expr_index, root, types)?;
+            check_expr(func, r.ptr.deref(), expr_index, root, types)?;
+            let l = find_expr(func, &l, expr_index, root, types)?;
+            let r = find_expr(func, &r, expr_index, root, types)?;
+            if !are_comparable(&l, &r, op, types) {
+                return Err(format!("Cannot {:?} compare a {:?} value with a {:?} value", op, l.name, r.name));
+            }
+            Ok(())
+        }
+        ExprKind::BinaryOp(l, r, op) => {
+            check_expr(func, l.ptr.deref(), expr_index, root, types)?;
+            check_expr(func, r.ptr.deref(), expr_index, root, types)?;
+            let l = find_expr(func, &l, expr_index, root, types)?;
+            let r = find_expr(func, &r, expr_index, root, types)?;
+            let _ = binary_op_result_type_of(l, r, op, types)?;
+            Ok(())
+        }
+        ExprKind::FunctionCall(n, args) => {
+            if n == "println" {
+                // special case, just check any expressions being printed :(
+                for arg in args.iter() {
+                    check_expr(func, arg.ptr.deref(), expr_index, root, types)?;
+                }
+                Ok(())
+            } else {
+                let func = find_function(n, root)?;
+                for (param, arg) in func.parameters.iter().zip(args) {
+                    let arg = find_expr(func, arg, expr_index, root, types)?;
+                    if param.ptr.typ.id != arg.id {
+                        return Err(format!("Cannot call function {} with type {:?} for parameter {} because it expects type {:?}",
+                                           func.name, arg.name, param.ptr.name, param.ptr.typ.name));
+                    }
+                }
+                Ok(())
             }
         }
     }
+}
 
-    fn check_expr_types(&mut self, expr: &Expr, types: &HashMap<String, Rc<TCType>>, functions: &HashMap<String, TCFunction>, in_function: &TCFunction) {
-        match &expr.kind {
-            ExprKind::Function(_, _, _, _) => unimplemented!("nested functions"),
-            ExprKind::If(_, _, _) => {}
-            ExprKind::Comparison(_,_,_) => {}
-            ExprKind::IntConstant(_) => {}
-            ExprKind::StringConstant(_) => {}
-            ExprKind::Return(ret_expr) => {
-                // TODO: in the parser? make sure that there is always a return expr if the function isn't void
-                // TODO: also make sure that there is a return expr in every if-else-branch
-                // TODO: also make sure that if there is a return expr before an if-else-set,
-                // TODO: it skips checking if the if-else-set has a return in it (because it won't be necessary)
-                println!("return inside function {}", in_function.name);
-                match ret_expr {
-                    Some(e) => {
-                        if in_function.return_type.kind == TypeKind::BuiltIn_void {
-                            self.add_error(format!("Error: function '{}' has return type 'void' and cannot return values.", in_function.name));
-                        } else {
-                            // just get the type of the first expression
-                            let expr_opt = self.get_first_expr_type(&(*e.ptr), types, functions, in_function);
-                            if expr_opt.error.is_some() {
-                                self.add_error(format!("Error: return expression cannot work in function '{}': {}", in_function.name, expr_opt.error.unwrap()));
-                            } else {
-                                let expr_type = expr_opt.typ.unwrap();
-                                if !check_type(&expr_type, &in_function.return_type) {
-                                    self.add_error(format!("Error: function '{}' has return type '{}' and cannot return a value of type {}.", in_function.name, in_function.return_type.name, expr_type.name));
-                                }
-                            }
-                        }
-                    }
-                    None => {
-                        if in_function.return_type.kind != TypeKind::BuiltIn_void && in_function.name != ".main".to_string() {
-                            self.add_error(format!("Error: function '{}' has return type '{}' and has to return a value.", in_function.name, in_function.return_type.name));
-                        }
-                    }
-                };
-            }
-            ExprKind::Reference(_) => {}
-            ExprKind::BinaryOp(_, _, _) => {}
-            ExprKind::FunctionCall(ident, args) => self.type_check_function_call(types, functions, in_function, ident, args),
-            ExprKind::NewAssignment(_, _) => {}
-        };
+fn are_comparable(left: &Type, right: &Type, op: &Comparison, types: &TypeCollector) -> bool {
+    match (left.id, right.id) {
+        (l, r) if l == types.string().id && r == types.string().id
+            && *op != Comparison::Equals && *op != Comparison::NotEquals => false,
+        (l, r) if l == types.string().id && r == types.string().id => true,
+        (l, r) if l == types.int64().id && r == types.int64().id => true,
+        (l, r) if l == r => true,
+        (l, r) if l != r => false,
+        (_, _) => false,
     }
+}
 
-    fn type_check_function_call(&mut self, types: &HashMap<String, Rc<TCType>>, functions: &HashMap<String, TCFunction>, in_function: &TCFunction, ident: &String, args: &Vec<Ptr<Expr>>) {
-        for a in args {
-            let ar = &(*a.ptr);
-            if matches!(ar.kind, ExprKind::FunctionCall(_, _)) {
-                self.check_expr_types(ar, types, functions, in_function);
+fn find_expr(func: &FunctionExpr, expr: &Ptr<Expr>, expr_index: usize, root: &Root, types: &TypeCollector) -> Result<Type, String> {
+    Ok(match &expr.ptr.kind {
+        ExprKind::Function(_) => types.unit(), // at a later point function declarations should be expressions
+        ExprKind::If(_, _, _) => types.unit(), // for now, I do like the idea of ifs as expressions though
+        ExprKind::IntConstant(_) => types.int64(),
+        ExprKind::StringConstant(_) => types.string(),
+        ExprKind::Comparison(_, _, _) => types.boolean(),
+        ExprKind::NewAssignment(_, v) => find_expr(func, &v, expr_index, root, types)?,
+        ExprKind::Return(v) => {
+            if let Some(v) = v {
+                find_expr(func, &v, expr_index, root, types)?
+            } else {
+                types.unit()
             }
+        },
+        ExprKind::Reference(ident) => {
+            find_reference(func, &ident, expr_index, root, types)?
         }
-        if ident != "println" {
-            println!("type checking function call to {}", ident);
-            let f = functions.get(ident.clone().as_str()).unwrap();
-            if matches!(f.param_count, Some(_)) && f.param_count.unwrap() != args.len() {
-                self.add_error(format!("Error: Wrong argument count in function call to '{}'", f.name));
-                // don't check argument types if enough aren't supplied, change this if it's more annoying than useful
-                return;
-            }
-            let mut i = 0;
-            for a in args {
-                let ar = &(*a.ptr);
-                match &ar.kind {
-                    /* This is type checking ARGUMENTS being used in a function call against the function declaration */
-                    ExprKind::Function(_, _, _, _) => {}
-                    ExprKind::If(_, _, _) => {}
-                    ExprKind::Comparison(_,_,_) => {}
-                    ExprKind::IntConstant(_) => {
-                        // TODO: store more metadata to show better error messages, like line number and the actual text on the line, highlighting the span where the error happens
-                        let tctype = types.get("int").unwrap();
-                        if !check_type(&tctype, &f.parameters[i].typ) {
-                            self.add_error(format!("Error: Wrong argument type '{}' for parameter '{}: {}' in call to function '{}'", tctype.name, f.parameters[i].name, f.parameters[i].typ.name, f.name));
-                        }
-                    }
-                    ExprKind::StringConstant(_) => {
-                        let tctype = types.get("string").unwrap();
-                        if !check_type(&tctype, &f.parameters[i].typ) {
-                            self.add_error(format!("Error: Wrong argument type '{}' for parameter '{}: {}' in call to function '{}'", tctype.name, f.parameters[i].name, f.parameters[i].typ.name, f.name));
-                        }
-                    }
-                    ExprKind::Return(_) => {}
-                    /* This is type checking ARGUMENTS being used in a function call against the function declaration */
-                    ExprKind::Reference(_) => {
-                        todo!("1. check function parameter references,\
-                            2. check variables when they are implemented");
-                    }
-                    ExprKind::BinaryOp(left, right, op) => {
-                        let res_type = self.get_binary_op_result_type(left, right, op, types, functions, in_function);
-                        if res_type.error.is_some() {
-                            self.add_error(format!("Error: binary op expression cannot work for parameter '{}: {}' of function '{}': {}", f.parameters[i].name, f.parameters[i].typ.name, f.name, res_type.error.unwrap()));
-                        }
-                        else {
-                            let expr_type = res_type.typ.unwrap();
-                            if !check_type(&expr_type, &f.parameters[i].typ) {
-                                self.add_error(format!("Error: Wrong argument type '{}' for parameter '{}: {}' in call to function '{}'", expr_type.name, f.parameters[i].name, f.parameters[i].typ.name, f.name));
-                            }
-                        }
-                    },
-                    ExprKind::FunctionCall(ident, _) => {
-                        let func = functions.get(ident).unwrap();
-                        if !check_type(&func.return_type, &f.parameters[i].typ) {
-                            self.add_error(format!("Error: Wrong argument type '{}' for parameter '{}: {}' in call to function '{}'", &func.return_type.name, f.parameters[i].name, f.parameters[i].typ.name, f.name));
-                        }
-                    }
-                    ExprKind::NewAssignment(_, _) => {}
+        ExprKind::BinaryOp(left, right, op) => {
+            let left = find_expr(func, &left, expr_index, root, types)?;
+            let right = find_expr(func, &right, expr_index, root, types)?;
+            binary_op_result_type_of(left, right, op, types)?
+        }
+        ExprKind::FunctionCall(func_to_call, _) => {
+            find_function(func_to_call.as_str(), root)?
+                .return_type
+                .clone()
+        }
+    })
+}
+
+fn find_function<'a>(name: &str, root: &'a Root) -> Result<&'a FunctionExpr, String> {
+    if let Some(fun) = root.functions.iter()
+        .map(|f| match &f.kind {
+            ExprKind::Function(f) => f,
+            _ => unreachable!()
+        })
+        .find(|p| p.name == name) {
+        Ok(fun)
+    } else {
+        Err(format!("Could not find function {}", name))
+    }
+}
+
+fn find_reference(func: &FunctionExpr, ident: &str, ref_index: usize, root: &Root, types: &TypeCollector) -> Result<Type, String> {
+    // 1. check local scope
+    // 2. check arguments
+    // 3. check global scope
+
+    for e in func.code.ptr.exprs.iter().take(ref_index) {
+        match &e.kind {
+            ExprKind::NewAssignment(n, v) => {
+                if n == ident {
+                    return find_expr(func, v, ref_index, root, types);
                 }
-                i += 1;
             }
+            _ => ()
         }
     }
 
-    fn get_first_expr_type(&mut self, expr: &Expr, types: &HashMap<String, Rc<TCType>>, functions: &HashMap<String, TCFunction>, in_function: &TCFunction) -> MaybeTCType {
-        match &expr.kind {
-            ExprKind::Function(_, _, _, _) => {
-                // function definition isn't an expression (for now at least)
-                return MaybeTCType::err("Function".to_string())
-                //return Rc::clone(types.get("void").unwrap());
-            }
-            ExprKind::If(_, _, _) => {
-                // at least for now
-                return MaybeTCType::ok(Rc::clone(types.get("void").unwrap()));
-            }
-            ExprKind::Comparison(_,_,_) => {
-                // at least for now
-                return MaybeTCType::ok(Rc::clone(types.get("void").unwrap()));
-            }
-            ExprKind::IntConstant(_) => {
-                return MaybeTCType::ok(Rc::clone(types.get("int").unwrap()));
-            }
-            ExprKind::StringConstant(_) => {
-                return MaybeTCType::ok(Rc::clone(types.get("string").unwrap()));
-            }
-            ExprKind::Return(_) => {
-                return MaybeTCType::err("Return".to_string());
-            }
-            ExprKind::Reference(ident) => {
-                for p in &in_function.parameters {
-                    if p.name == *ident {
-                        return MaybeTCType::ok(Rc::clone(&p.typ));
-                    }
-                }
-                return MaybeTCType::err(format!("cannot reference {} (reference not found)", ident));
-            }
-            ExprKind::BinaryOp(left, right, op) =>
-                return self.get_binary_op_result_type(left, right, op, types, functions, in_function),
-            ExprKind::FunctionCall(name, _) => {
-                let func = functions.get(name);
-                return if func.is_none() {
-                    MaybeTCType::err(format!("Function '{}' could not be found", name))
-                } else {
-                    MaybeTCType::ok(Rc::clone(types.get(func.unwrap().return_type.name.as_str()).unwrap()))
-                }
-            }
-            ExprKind::NewAssignment(_, _) => {
-                return MaybeTCType::ok(Rc::clone(types.get("void").unwrap()));
-            }
+
+    for p in &func.parameters {
+        if p.ptr.name == ident {
+            return Ok(p.ptr.typ.clone());
         }
     }
+    Err("Could not find reference".into())
+}
 
-    fn get_binary_op_result_type(&mut self, l: &Ptr<Expr>, r: &Ptr<Expr>, op: &BinaryOp, types: &HashMap<String, Rc<TCType>>, functions: &HashMap<String, TCFunction>, in_function: &TCFunction) -> MaybeTCType {
-        let le = self.get_first_expr_type(&(*l.ptr), types, functions, in_function);
-        if le.error.is_some() {
-            return le; // if there is an error at this point, return
-        }
-        let ri = self.get_first_expr_type(&(*r.ptr), types, functions, in_function);
-        if ri.error.is_some() {
-            return ri;
-        }
-        let left = le.typ.unwrap();
-        let right = ri.typ.unwrap();
-        match op {
-            BinaryOp::Addition => match &left.kind {
-                TypeKind::BuiltIn_int => match &right.kind {
-                    TypeKind::BuiltIn_int => {
-                        return MaybeTCType::ok( Rc::clone(&left));
-                    }
-                    TypeKind::BuiltIn_string => {
-                        return MaybeTCType::err("int + string is not possible".to_string());
-                    }
-                    TypeKind::BuiltIn_double => {
-                        return MaybeTCType::ok(Rc::clone(&right));
-                    }
-                    _ => MaybeTCType::err(format!("int + {:?} is not possible", right.kind)),
-                },
-                TypeKind::BuiltIn_string => match &right.kind {
-                    TypeKind::BuiltIn_int => {
-                        return MaybeTCType::ok(Rc::clone(&left));
-                    }
-                    TypeKind::BuiltIn_string => {
-                        return MaybeTCType::ok(Rc::clone(&left));
-                    }
-                    TypeKind::BuiltIn_double => {
-                        return MaybeTCType::ok(Rc::clone(&left));
-                    }
-                    _ => MaybeTCType::err(format!("string + {:?} is not possible", right.kind)),
-                },
-                TypeKind::BuiltIn_double => match &right.kind {
-                    TypeKind::BuiltIn_int => {
-                        return MaybeTCType::ok(Rc::clone(&left));
-                    }
-                    TypeKind::BuiltIn_string => {
-                        return MaybeTCType::err("double + string is not possible".to_string());
-                    }
-                    TypeKind::BuiltIn_double => {
-                        return MaybeTCType::ok(Rc::clone(&left));
-                    }
-                    _ => MaybeTCType::err(format!("double + {:?} is not possible", right.kind)),
-                },
-                TypeKind::BuiltIn_any => MaybeTCType::err(format!("any + {:?} is not possible", right.kind)),
-                TypeKind::BuiltIn_void => MaybeTCType::err(format!("void + {:?} is not possible", right.kind)),
-                TypeKind::User_class => {
-                    return MaybeTCType::err(format!("user classes not implemented"));
-                }
-            },
-            BinaryOp::Subtraction => match &left.kind {
-                TypeKind::BuiltIn_int => match &right.kind {
-                    TypeKind::BuiltIn_int => {
-                        return MaybeTCType::ok( Rc::clone(&left));
-                    }
-                    TypeKind::BuiltIn_string => {
-                        return MaybeTCType::err("int - string is not possible".to_string());
-                    }
-                    TypeKind::BuiltIn_double => {
-                        return MaybeTCType::ok(Rc::clone(&right));
-                    }
-                    _ => MaybeTCType::err(format!("int - {:?} is not possible", right.kind)),
-                },
-                TypeKind::BuiltIn_double => match &right.kind {
-                    TypeKind::BuiltIn_int => {
-                        return MaybeTCType::ok(Rc::clone(&left));
-                    }
-                    TypeKind::BuiltIn_string => {
-                        return MaybeTCType::err("double - string is not possible".to_string());
-                    }
-                    TypeKind::BuiltIn_double => {
-                        return MaybeTCType::ok(Rc::clone(&left));
-                    }
-                    _ => MaybeTCType::err(format!("double - {:?} is not possible", right.kind)),
-                },
-                TypeKind::BuiltIn_string => MaybeTCType::err(format!("string - {:?} is not possible", right.kind)),
-                TypeKind::BuiltIn_any => MaybeTCType::err(format!("any - {:?} is not possible", right.kind)),
-                TypeKind::BuiltIn_void => MaybeTCType::err(format!("void - {:?} is not possible", right.kind)),
-                TypeKind::User_class => {
-                    return MaybeTCType::err(format!("user classes not implemented"));
-                }
-            },
-        }
-    }
-
-    fn build_types(&mut self, _ast: &Root) -> HashMap<String, Rc<TCType>> {
-        let mut types = HashMap::new();
-        types.insert("any".into(), Rc::new(TCType {
-            name: "any".into(),
-            kind: TypeKind::BuiltIn_any,
-            base_type: None,
-        }));
-        types.insert("string".into(), Rc::new(TCType {
-            name: "string".into(),
-            kind: TypeKind::BuiltIn_string,
-            base_type: None,
-        }));
-        types.insert("int".into(), Rc::new(TCType {
-            name: "int".into(),
-            kind: TypeKind::BuiltIn_int,
-            base_type: None,
-        }));
-        types.insert("double".into(), Rc::new(TCType {
-            name: "double".into(),
-            kind: TypeKind::BuiltIn_double,
-            base_type: None,
-        }));
-        types.insert("void".into(), Rc::new(TCType {
-            name: "void".into(),
-            kind: TypeKind::BuiltIn_void,
-            base_type: None,
-        }));
-        return types;
-    }
-
-
-    fn build_functions(&mut self, ast: &Root, types: &HashMap<String, Rc<TCType>>) -> Option<HashMap<String, TCFunction>> {
-        let mut functions = HashMap::new();
-        for f in &ast.functions {
-            match &f.kind {
-                // currently there are no nested functions nor classes, so all functions can be found in the global scope
-                ExprKind::Function(ident, return_type, parameters, _) => {
-                    let mut params = Vec::<TCParameter>::new();
-                    for p in parameters {
-                        let cl_pa = (*p.ptr).clone();
-                        let tctype = types.get(cl_pa.1.as_str());
-                        match tctype {
-                            Some(t) => {
-                                params.push(TCParameter {
-                                    name: cl_pa.0,
-                                    typ: Rc::clone(t),
-                                });
-                            }
-                            None => {
-                                self.add_error(
-                                    format!("Error: type '{}' does not exist -- found as parameter '{}' of function '{}'", cl_pa.1, cl_pa.0, ident));
-                                return None;
-                            }
-                        }
-                    }
-                    let tc_return_type = types.get(return_type.as_str());
-                    let ret_type = match tc_return_type {
-                        Some(t) => {
-                            Rc::clone(t)
-                        }
-                        None => {
-                            self.add_error(
-                                format!("Error: type '{}' does not exist -- found as return type of function '{}'", return_type, ident));
-                            return None;
-                        }
-                    };
-                    functions.insert(ident.clone(), TCFunction {
-                        name: ident.clone(),
-                        return_type: ret_type,
-                        param_count: Some(parameters.len()),
-                        parameters: params,
-                    });
-                }
-                _ => unimplemented!(),
-            };
-        }
-        return Some(functions);
+fn binary_op_result_type_of(left: Type, right: Type, op: &BinaryOp, types: &TypeCollector) -> Result<Type,String> {
+    // TODO: rewrite this to be more performant, the current iteration is pretty awful
+    match (left.id, right.id) {
+        (l, _) if l == types.string().id => Ok(types.string()),
+        (l, r) if l == types.int64().id && r == types.int64().id => Ok(types.int64()),
+        (l, r) if l == r => Ok(left),
+        (l, r) if l != r => Err(format!("incompatible types in binary op {:?} ({} and {})", op, left.name, right.name)),
+        (_, _) => Ok(types.unit())
     }
 }
 
 
-fn check_type(actual: &TCType, expected: &TCType) -> bool {
-    if expected.kind == TypeKind::BuiltIn_any {
-        return true;
-    }
-    if expected.name == actual.name {
-        return true;
-    }
-    return false;
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::TypeScope;
 
-fn type_exists(typ: String, types: &HashMap<String, Rc<TCType>>) -> bool {
-    return types.contains_key(typ.as_str());
-}
+    #[test]
+    pub fn test() {
+        let code = r#"
+        fn test(s: cool_type) -> cool_type {
+            return s;
+        }
 
+        println("hello!");"#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        types.try_define_type("_type", TypeScope::Global).unwrap();
+        types.try_define_type("cool_type", TypeScope::Global).unwrap();
+        assert!(check_types(&mut ast, &mut types));
+    }
+
+    #[test]
+    #[should_panic(expected = "Tried to return item of type Type { id: 10, name: \"_type\", scope: Global } in function test expecting return type Type { id: 11, name: \"cool_type\", scope: Global }")]
+    pub fn test_negative() {
+        let code = r#"
+        fn test(s: _type) -> cool_type {
+            return s;
+        }
+
+        println("hello!");"#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        types.try_define_type("_type", TypeScope::Global).unwrap();
+        types.try_define_type("cool_type", TypeScope::Global).unwrap();
+        check_types(&mut ast, &mut types);
+    }
+}

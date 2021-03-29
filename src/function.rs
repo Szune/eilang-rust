@@ -1,26 +1,30 @@
 use crate::ops::OpCodes;
 use crate::ast::Ptr;
+use std::ops::Deref;
+use crate::types::Type;
+
+#[derive(Debug,Clone)]
+pub struct Parameter {
+    pub name: String,
+    pub typ: Type,
+}
 
 #[derive(Debug)]
 pub struct Function {
     pub name: String,
-    pub return_type: String,
-    pub arguments: Vec<(String,String)>,
+    pub return_type: Type,
+    pub parameters: Vec<Parameter>,
     pub code: Vec<OpCodes>,
-
 }
 
 impl Function {
-    pub fn new(name: String, return_type: String, arguments: &Vec<Ptr<(String, String)>>) -> Function {
-        // TODO: fix this huge mess
-        let mut args : Vec<(String,String)> = Vec::new();
-        for a in arguments {
-            args.push((*a.ptr).clone());
-        }
+    pub fn new(name: String, return_type: Type, arguments: &Vec<Ptr<Parameter>>) -> Function {
         Function {
             name,
             return_type,
-            arguments: args,
+            parameters: arguments.iter()
+                .map(|f| f.ptr.deref().clone())
+                .collect(),
             code: Vec::new(),
         }
     }

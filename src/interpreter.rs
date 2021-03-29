@@ -37,13 +37,14 @@ impl Scope {
 pub struct CallFrame {
     addr: Cell<usize>,
     func: Rc<Function>,
-    called_with_arg_count: i64
+    called_with_arg_count: i64,
 }
 
 pub struct Interpreter {}
+
 impl Interpreter {
     pub fn interpret(env: Env) {
-        let main = env.get_function(".main".into());
+        let main = env.get_function(".main".into()).expect("Missing a main function");
         let mut stack = Vec::<Rc<Value>>::new();
         let scopes = &mut Vec::<Scope>::new();
         scopes.push(Scope::new());
@@ -59,12 +60,13 @@ impl Interpreter {
 
         while !frames.is_empty() {
             let frame = &mut frames.last().unwrap();
-            let op = frame.func.code.get(frame.addr.get()).unwrap();
+            let op = frame.func.code.get(frame.addr.get())
+                .expect(format!("Addr {} out of bounds, total opcodes {}", frame.addr.get(), frame.func.code.len()).as_str());
             //println!("on addr {}", frame.addr.get());
             match op {
                 OpCodes::Add => {
-                    Interpreter::OpCodeAdd(&mut stack)
-                },
+                    Interpreter::op_code_add(&mut stack)
+                }
                 OpCodes::Subtract => {
                     let right = stack.pop();
                     let left = stack.pop();
@@ -72,7 +74,7 @@ impl Interpreter {
                         Value::Integer(l) => match right.unwrap().deref() {
                             Value::Integer(r) => {
                                 stack.push(Rc::new(Value::int(l - r)));
-                            },
+                            }
                             _ => unimplemented!(),
                         },
                         _ => unimplemented!(),
@@ -84,13 +86,14 @@ impl Interpreter {
                         Value::Integer(num) => *num,
                         _ => panic!("noo"),
                     };
-                    let n = match name.unwrap().deref() {
+                    let name = match name.unwrap().deref() {
                         Value::String(s) => s.clone(),
                         _ => panic!("noo"),
                     };
                     let fr = CallFrame {
                         addr: Cell::new(0usize),
-                        func: env.get_function(n.clone()),
+                        func: env.get_function(name.clone())
+                            .expect(format!("Function {} not found", name.clone()).as_str()),
                         called_with_arg_count: arg_count,
                     };
                     scopes.push(Scope::new());
@@ -98,20 +101,20 @@ impl Interpreter {
                     skip_inc = true;
                     //println!("function call in interpreter: {:?}", n);
                     //println!("function call in interpreter: {:?} {:?}", n, args);
-                },
+                }
                 OpCodes::Push(value) => {
                     stack.push(Rc::clone(&value));
-                },
+                }
                 OpCodes::Reference(n) => {
                     let s = scopes.last_mut().unwrap();
                     let value = s.get_variable(n.clone());
                     stack.push(Rc::clone(&value));
-                },
+                }
                 OpCodes::Return => {
                     //println!("Returning from {}", frames.last().unwrap().func.name.clone());
                     frames.pop();
                     scopes.pop();
-                },
+                }
                 OpCodes::SetVar => {
                     let ident = stack.pop().unwrap();
                     let value = stack.pop().unwrap();
@@ -121,7 +124,7 @@ impl Interpreter {
                     };
                     let s = scopes.last_mut().unwrap();
                     s.set_variable(ident.clone(), value);
-                },
+                }
                 OpCodes::Println => {
                     // argument count is popped in OperationCodes::Call, may need it later here though
                     if frame.called_with_arg_count < 1 {
@@ -133,16 +136,16 @@ impl Interpreter {
                         let print_value = get_printable_value(value);
                         println!("{}", print_value);
                     }
-                },
+                }
                 OpCodes::FunctionSetVar(n) => {
                     let value = stack.pop();
                     let s = scopes.last_mut().unwrap();
                     s.set_variable(n.clone(), value.unwrap());
-                },
+                }
                 OpCodes::Jump(addr) => {
                     frame.addr.set(*addr);
                     skip_inc = true;
-                },
+                }
                 OpCodes::BranchIfFalse(addr) => {
                     let brval = stack.pop().unwrap();
                     let brval = brval.deref();
@@ -152,28 +155,28 @@ impl Interpreter {
                     }
                 }
                 OpCodes::Equal => {
-                    Interpreter::OpEqual(&mut stack, false);
+                    Interpreter::op_equal(&mut stack, false);
                 }
                 OpCodes::NotEqual => {
-                    Interpreter::OpEqual(&mut stack, true);
+                    Interpreter::op_equal(&mut stack, true);
                 }
                 OpCodes::LessThan => {
-                    Interpreter::OpLessThan(&mut stack);
+                    Interpreter::op_less_than(&mut stack);
                 }
                 OpCodes::GreaterThan => {
-                    Interpreter::OpGreaterThan(&mut stack);
+                    Interpreter::op_greater_than(&mut stack);
                 }
                 OpCodes::LessThanEquals => {
-                    Interpreter::OpLessThanEquals(&mut stack);
+                    Interpreter::op_less_than_equals(&mut stack);
                 }
                 OpCodes::GreaterThanEquals => {
-                    Interpreter::OpGreaterThanEquals(&mut stack);
+                    Interpreter::op_greater_than_equals(&mut stack);
                 }
                 OpCodes::And => {
-                    Interpreter::OpAnd(&mut stack);
+                    Interpreter::op_and(&mut stack);
                 }
                 OpCodes::Or => {
-                    Interpreter::OpOr(&mut stack);
+                    Interpreter::op_or(&mut stack);
                 }
             }
             if frames.is_empty() {
@@ -189,7 +192,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn OpAnd(stack: &mut Vec<Rc<Value>>) {
+    fn op_and(stack: &mut Vec<Rc<Value>>) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();
@@ -207,7 +210,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn OpOr(stack: &mut Vec<Rc<Value>>) {
+    fn op_or(stack: &mut Vec<Rc<Value>>) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();
@@ -225,7 +228,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn OpLessThan(stack: &mut Vec<Rc<Value>>) {
+    fn op_less_than(stack: &mut Vec<Rc<Value>>) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();
@@ -243,7 +246,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn OpGreaterThan(stack: &mut Vec<Rc<Value>>) {
+    fn op_greater_than(stack: &mut Vec<Rc<Value>>) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();
@@ -261,7 +264,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn OpLessThanEquals(stack: &mut Vec<Rc<Value>>) {
+    fn op_less_than_equals(stack: &mut Vec<Rc<Value>>) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();
@@ -279,7 +282,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn OpGreaterThanEquals(stack: &mut Vec<Rc<Value>>) {
+    fn op_greater_than_equals(stack: &mut Vec<Rc<Value>>) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();
@@ -297,7 +300,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn OpEqual(stack: &mut Vec<Rc<Value>>, not: bool) {
+    fn op_equal(stack: &mut Vec<Rc<Value>>, not: bool) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();
@@ -312,6 +315,10 @@ impl Interpreter {
                 Value::Integer(r) => l == r,
                 _ => unimplemented!(),
             },
+            Value::String(l) => match right {
+                Value::String(r) => l == r,
+                _ => unimplemented!(),
+            }
             _ => unimplemented!(),
         };
 
@@ -319,7 +326,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn OpCodeAdd(stack: &mut Vec<Rc<Value>>) {
+    fn op_code_add(stack: &mut Vec<Rc<Value>>) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();
@@ -328,13 +335,13 @@ impl Interpreter {
             Value::Integer(l) => match right {
                 Value::Integer(r) => {
                     stack.push(Rc::new(Value::int(l + r)));
-                },
+                }
                 _ => unimplemented!(),
             },
             Value::String(l) => match right {
                 Value::String(r) => {
                     stack.push(Rc::new(Value::string(l.clone() + &r.clone())));
-                },
+                }
                 Value::Integer(r) => {
                     // this can't be the right way to do it...
                     stack.push(Rc::new(Value::string(l.clone() + format!("{}", &r.clone()).as_str())));
@@ -350,18 +357,39 @@ fn get_printable_value(value: Rc<Value>) -> String {
     match value.borrow() {
         Value::Empty => {
             "{}".into()
-        },
+        }
         Value::Integer(i) => {
             format!("{}", i)
-        },
+        }
         Value::Double(d) => {
             format!("{}", d)
-        },
+        }
         Value::String(s) => {
             s.clone()
-        },
+        }
         Value::Bool(b) => {
             b.to_string()
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::TypeCollector;
+
+    #[test]
+    pub fn test_println() {
+        let types = TypeCollector::new();
+        let mut main = Function::new(".main".into(), types.any(), &Vec::new());
+        main.code.push(OpCodes::Push(Rc::new(Value::String("Hello world".into()))));
+        main.code.push(OpCodes::Push(Rc::new(Value::Integer(1))));
+        main.code.push(OpCodes::Push(Rc::new(Value::String("println".into()))));
+        main.code.push(OpCodes::Call);
+        main.code.push(OpCodes::Return);
+        let mut env = Env::new(types);
+        env.add_function(".main".into(), main);
+        let _ = Interpreter::interpret(env);
     }
 }

@@ -1,17 +1,31 @@
 #[derive(Debug, Clone)]
 pub struct Token {
     pub typ: TokenType,
+    pub line: u64,
+    pub col: u64,
 }
 
 
 const _EMPTY: Token = Token { // TODO: I'm not sure this does what I intend, look up static/const and determine how to make sure there's only one shared immutable reference to this instance, if I understand this correctly it'll just create a copy for every call anyway..
     typ: TokenType::None,
+    line: 0,
+    col: 0,
 };
 
 impl Token {
     pub fn new(typ: TokenType) -> Token {
         Token {
             typ,
+            line: 0,
+            col: 0
+        }
+    }
+
+    pub fn with_pos(typ: TokenType, line: u64, col: u64) -> Token {
+        Token {
+            typ,
+            line,
+            col
         }
     }
 
@@ -22,30 +36,40 @@ impl Token {
     pub fn ident(value: String) -> Token {
         Token {
             typ: TokenType::Identifier(value),
+            line: 0,
+            col: 0,
         }
     }
 
     pub fn string(value: String) -> Token {
         Token {
             typ: TokenType::String(value),
+            line: 0,
+            col: 0,
         }
     }
 
     pub fn integer(value: i64) -> Token {
         Token {
             typ: TokenType::Integer(value),
+            line: 0,
+            col: 0,
         }
     }
 
     pub fn double(value: f64) -> Token {
         Token {
             typ: TokenType::Double(value),
+            line: 0,
+            col: 0,
         }
     }
 
     pub fn unknown(value: String) -> Token {
         Token {
             typ: TokenType::Unknown(value),
+            line: 0,
+            col: 0,
         }
     }
 

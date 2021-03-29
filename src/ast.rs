@@ -1,5 +1,6 @@
 use crate::compiler::Compiler;
-use crate::function::Function;
+use crate::function::{Function, Parameter};
+use crate::types::Type;
 
 #[derive(Debug, Clone)]
 pub struct Ptr<T: ?Sized> {
@@ -47,13 +48,13 @@ pub struct Expr {
 impl Expr {
     pub fn new(kind: ExprKind) -> Expr {
         Expr {
-            kind
+            kind,
         }
     }
 
     pub fn accept(&self, compiler: &mut Compiler) {
         match &self.kind {
-            ExprKind::Function(_, _, _, _) => {
+            ExprKind::Function(_) => {
                 //println!("visiting function {}", name.clone());
                 compiler.visit_function(&self.kind);
             }
@@ -63,7 +64,7 @@ impl Expr {
 
     pub fn accept_in_function(&self, compiler: &mut Compiler, f: &mut Function) {
         match &self.kind {
-            ExprKind::Function(_, _, _, _) => {
+            ExprKind::Function(_) => {
                 //println!("visiting function in function {}", name.clone());
                 unimplemented!("function in function");
             }
@@ -104,9 +105,16 @@ impl Expr {
 }
 
 #[derive(Debug)]
+pub struct FunctionExpr {
+    pub name: String,
+    pub return_type: Type,
+    pub parameters: Vec<Ptr<Parameter>>,
+    pub code: Ptr<Block>,
+}
+
+#[derive(Debug)]
 pub enum ExprKind {
-    // TODO: extract enum variants to make this less confusing?
-    Function(String, String, Vec<Ptr<(String, String)>>, Ptr<Block>),
+    Function(FunctionExpr),
     NewAssignment(String, Ptr<Expr>),
     If(Ptr<Expr>, Ptr<Block>, Option<Ptr<Block>>),
     IntConstant(i64),
@@ -118,7 +126,7 @@ pub enum ExprKind {
     FunctionCall(String, Vec<Ptr<Expr>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 pub enum Comparison {
     Equals,
     NotEquals,

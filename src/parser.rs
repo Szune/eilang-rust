@@ -1,24 +1,29 @@
 use crate::ast::*;
 use crate::lexer::Lexer;
 use crate::token::*;
+use crate::types::{TypeCollector, TypeScope};
+use std::ops::Deref;
+use crate::function::Parameter;
 
 pub struct Parser {
     lexer: Lexer,
     buffer: [Token; 2],
     pub root: Root,
+    types: TypeCollector,
 }
 
 impl Parser {
-    pub fn parse(lexer: Lexer) -> Root {
+    pub fn parse(lexer: Lexer) -> (Root,TypeCollector) {
         let mut parser = Parser {
             lexer,
             buffer: [Token::empty(), Token::empty()],
             root: Root::new(),
+            types: TypeCollector::new(),
         };
         parser.consume();
         parser.consume();
         parser.parse_private();
-        return parser.root;
+        return (parser.root,parser.types);
     }
 
     fn parse_private(&mut self) {
@@ -42,13 +47,14 @@ impl Parser {
             };
         }
         global_block.exprs.push(Expr::new(ExprKind::Return(None)));
+        let any = self.types.any();
         self.root.functions.push(
-            Expr::new(ExprKind::Function(".main".into(), "any".into(), Vec::new(), Ptr(global_block))));
-    }
-
-    fn parse_function_call_in_global_scope(&mut self, name: String) -> Expr {
-        let arguments = self.parse_argument_list();
-        return Expr::new(ExprKind::FunctionCall(name, arguments));
+            Expr::new(ExprKind::Function(FunctionExpr {
+                name: ".main".into(),
+                return_type: any.clone(),
+                parameters: Vec::new(),
+                code: Ptr(global_block)
+            })));
     }
 
     fn parse_global_function(&mut self) -> Expr {
@@ -56,20 +62,33 @@ impl Parser {
         let ident = self.parse_full_identifier();
         //println!("function identifier: {}", ident.string.clone().unwrap());
         let parameters = self.parse_parameter_list();
+        let parameters = parameters.iter()
+            .map(|p| {
+                let (arg, typ) = p.ptr.deref().clone();
+                let typ =
+                    self.types
+                        .get_type(&typ, &TypeScope::Global);
+                Ptr(Parameter {
+                    name: arg,
+                    typ,
+                })
+            }).collect();
         self.require(TokenType::Arrow);
         let return_type = self.parse_full_identifier();
+        let return_type = self.types
+            .get_type(&return_type, &TypeScope::Global);
         /*println!(
             "function ident: '{}', function return type: '{}'",
             ident.string.clone().unwrap(),
             return_type.string.clone().unwrap()
         );*/
         let block = self.parse_block();
-        return Expr::new(ExprKind::Function(
-            ident,
+        Expr::new(ExprKind::Function(FunctionExpr {
+            name: ident,
             return_type,
             parameters,
-            block,
-        ));
+            code: block,
+        }))
     }
 
     fn parse_block(&mut self) -> Ptr<Block> {
@@ -105,7 +124,7 @@ impl Parser {
                         TokenType::Else => {
                             self.consume();
                             Some(self.parse_block())
-                        },
+                        }
                         _ => None,
                     };
 
@@ -115,7 +134,7 @@ impl Parser {
                 let expr = self.parse_outermost_expr();
                 self.require(TokenType::Semicolon);
                 expr
-            },
+            }
             _ => {
                 let expr = self.parse_outermost_expr();
                 expr
@@ -201,7 +220,7 @@ impl Parser {
         let ident = self.parse_full_identifier();
         self.require(TokenType::Walrus);
         let value = self.parse_or();
-        Expr::new(ExprKind::NewAssignment(ident,Ptr(value)))
+        Expr::new(ExprKind::NewAssignment(ident, Ptr(value)))
     }
 
     fn parse_binary_ops_1(&mut self) -> Expr {
@@ -243,21 +262,21 @@ impl Parser {
     fn parse_innermost_expr(&mut self) -> Expr {
         return match &self.buffer[0].typ {
             TokenType::Integer(val) => {
-                let expr = Expr::new(ExprKind::IntConstant(*val));
+                let expr = Expr::new(ExprKind::IntConstant(*val)); //, self.types.int64());
                 self.consume();
                 expr
             }
             TokenType::String(val) => {
-                let expr = Expr::new(ExprKind::StringConstant(val.clone()));
+                let expr = Expr::new(ExprKind::StringConstant(val.clone())); //, self.types.string());
                 self.consume();
                 expr
             }
             TokenType::Identifier(_) => {
                 let ident = self.parse_full_identifier();
                 if self.is_token(TokenType::LeftParenthesis) {
-                    return self.parse_function_call(ident);
+                    self.parse_function_call(ident)
                 } else {
-                    return Expr::new(ExprKind::Reference(ident));
+                    Expr::new(ExprKind::Reference(ident))
                 }
             }
             TokenType::LeftParenthesis => {
@@ -345,16 +364,7 @@ impl Parser {
         // check only if the enum variant is the same, we don't care about any value they are holding
         let consumed = self.consume_and_return();
         if consumed.typ != token {
-            panic!("oh no, expected {:?} but was {:?}", token, consumed.typ);
+            panic!("oh no, expected {:?} but was {:?}", token, consumed);
         }
-    }
-
-    fn require_and_return(&mut self, token: TokenType) -> Token {
-        let consumed = self.consume_and_return();
-        // check only if the enum variant is the same, we don't care about any value they are holding
-        if consumed.typ != token {
-            panic!("oh no, expected {:?} but was {:?}", token, consumed.typ);
-        }
-        return consumed;
     }
 }
