@@ -40,6 +40,13 @@ fn main() {
         r#"
         fn add(x: int, y: int) -> int { return x + y; }
 
+        added := add(3,2);
+        if add(2,3) == added {
+            println("works all right");
+        } else {
+            println("there's a bug");
+        }
+
         println("add: " + add(135,2));
         println(5);
         test := 3;
