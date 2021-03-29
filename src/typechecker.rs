@@ -61,11 +61,16 @@ fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, 
     match &expr.kind {
         ExprKind::Return(r) =>
             {
+                if func.return_type.id == types.any().id {
+                    return Ok(());
+                }
                 if let Some(r) = r {
                     let returned_type = find_expr(func, &r, expr_index, root, types)?;
                     if returned_type.id != func.return_type.id {
                         return Err(format!("Tried to return item of type {:?} in function {} expecting return type {:?}", returned_type, func.name, func.return_type));
                     }
+                } else if func.return_type.id != types.unit().id {
+                    return Err(format!("Tried to return unit in function {} expecting return type {:?}", func.name, func.return_type));
                 }
                 Ok(())
             }

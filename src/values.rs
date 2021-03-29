@@ -1,13 +1,13 @@
 #[derive(Debug)]
 pub enum Value {
-    Empty,
+    Unit,
     Integer(i64),
     Double(f64),
     String(String),
     Bool(bool),
 }
 
-const _VALUE : Value = Value::Empty;
+const _VALUE : Value = Value::Unit;
 
 impl Value {
     pub fn int(value: i64) -> Value {
@@ -22,7 +22,11 @@ impl Value {
         Value::String(value)
     }
 
-    pub fn empty() -> Value {
+    pub fn unit() -> Value {
         _VALUE
+    }
+
+    pub fn bool(value: bool) -> Value {
+        Value::Bool(value)
     }
 }

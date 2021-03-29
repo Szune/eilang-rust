@@ -7,6 +7,21 @@ use crate::env::Env;
 use std::rc::Rc;
 use crate::types::TypeCollector;
 
+macro_rules! assert_returns (
+    ($ops:expr, $name:expr) => {
+        let mut returns = false;
+        for op in &$ops {
+            if matches!(op, OpCodes::Return) {
+                returns = true;
+                break;
+            }
+        }
+        if !returns {
+            panic!("Missing return in function {}", $name);
+        }
+    }
+);
+
 pub struct Compiler {
     env: Env,
 }
@@ -115,9 +130,16 @@ impl Compiler {
                     e.accept_in_function(self, &mut f);
                     //println!("{:?}", e);
                 }
+
+                // if it's a function returning unit, write an implicit return
+                if newf.return_type.id == self.env.types.unit().id {
+                    f.code.push(OpCodes::Push(Rc::new(Value::Unit)));
+                    f.code.push(OpCodes::Return);
+                }
+
+                assert_returns!(f.code, f.name);
                 //println!("Code in function {}: {:?}", f.name.clone(), f.code);
                 self.env.add_function(f.name.clone(), f);
-                // TODO: add function to a list of compiled functions
             }
             _ => unreachable!(),
         }
@@ -133,6 +155,7 @@ impl Compiler {
             }
             ExprKind::Return(None) => {
                 //println!("Compiling empty return");
+                func.code.push(OpCodes::Push(Rc::new(Value::Unit)));
                 func.code.push(OpCodes::Return);
             }
             _ => unreachable!(),

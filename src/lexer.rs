@@ -312,6 +312,8 @@ impl Lexer {
                     }
                     self.queue.push_back(Token::with_pos(TokenType::String(String::from_iter(sb)), self.line, self.col));
                     self.queue.push_back(Token::with_pos(TokenType::Plus, self.line, self.col));
+                    // implicitly put parentheses around value
+                    self.queue.push_back(Token::with_pos(TokenType::LeftParenthesis, self.line, self.col));
                     sb = Vec::new();
                     self.consume();
 
@@ -319,6 +321,7 @@ impl Lexer {
                         let next_token = self.next_token_no_queue();
                         self.queue.push_back(next_token);
                     }
+                    self.queue.push_back(Token::with_pos(TokenType::RightParenthesis, self.line, self.col));
                 }
                 /* any char */
                 (_, _) => sb.push(self.buffer[0])

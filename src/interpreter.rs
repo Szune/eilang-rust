@@ -189,6 +189,8 @@ impl Interpreter {
                 skip_inc = false;
             }
         }
+
+        println!("Stack after interpreting: {:#?}", stack);
     }
 
     #[inline]
@@ -355,7 +357,7 @@ impl Interpreter {
 
 fn get_printable_value(value: Rc<Value>) -> String {
     match value.borrow() {
-        Value::Empty => {
+        Value::Unit => {
             "{}".into()
         }
         Value::Integer(i) => {

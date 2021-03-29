@@ -73,10 +73,14 @@ impl Parser {
                     typ,
                 })
             }).collect();
-        self.require(TokenType::Arrow);
-        let return_type = self.parse_full_identifier();
-        let return_type = self.types
-            .get_type(&return_type, &TypeScope::Global);
+        let return_type = if self.is_token(TokenType::Arrow) {
+            self.require(TokenType::Arrow);
+            let return_type = self.parse_full_identifier();
+            self.types.get_type(&return_type, &TypeScope::Global)
+        } else {
+            // if return type is not specified, implicitly set it to Unit
+            self.types.unit()
+        };
         /*println!(
             "function ident: '{}', function return type: '{}'",
             ident.string.clone().unwrap(),
