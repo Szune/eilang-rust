@@ -389,3 +389,29 @@ impl Parser {
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn string_constant() {
+        let lexer = Lexer::new("\"hello\"".into());
+        let (root, _) = Parser::parse(lexer);
+        let main =
+            root.functions.iter()
+                .map(|f| match &f.kind {
+                    ExprKind::Function(f) => {f}
+                    _ => unreachable!(),
+                })
+                .filter(|f| f.name == ".main")
+                .next()
+                .unwrap();
+
+        match main.code.ptr.exprs.first().unwrap().kind {
+            ExprKind::StringConstant(_) => {},
+            _ => unreachable!(),
+        }
+    }
+}
