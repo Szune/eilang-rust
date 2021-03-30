@@ -402,7 +402,7 @@ mod tests {
         let main =
             root.functions.iter()
                 .map(|f| match &f.kind {
-                    ExprKind::Function(f) => {f}
+                    ExprKind::Function(f) => f,
                     _ => unreachable!(),
                 })
                 .filter(|f| f.name == ".main")
@@ -410,8 +410,8 @@ mod tests {
                 .unwrap();
 
         match main.code.ptr.exprs.first().unwrap().kind {
-            ExprKind::StringConstant(_) => {},
-            _ => unreachable!(),
+            ExprKind::StringConstant(_) => {}, // as expected
+            _ => assert!(false, "String constant did not parse into a string constant expression AST node"),
         }
     }
 }
