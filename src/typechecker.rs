@@ -262,11 +262,10 @@ mod tests {
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
         types.try_define_type("_type", TypeScope::Global).unwrap();
         types.try_define_type("cool_type", TypeScope::Global).unwrap();
-        assert!(check_types(&mut ast, &mut types));
+        assert!(check_types(&mut ast, &mut types).is_ok());
     }
 
     #[test]
-    #[should_panic(expected = "Tried to return item of type Type { id: 10, name: \"_type\", scope: Global } in function test expecting return type Type { id: 11, name: \"cool_type\", scope: Global }")]
     pub fn test_negative() {
         let code = r#"
         fn test(s: _type) -> cool_type {
@@ -278,6 +277,6 @@ mod tests {
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
         types.try_define_type("_type", TypeScope::Global).unwrap();
         types.try_define_type("cool_type", TypeScope::Global).unwrap();
-        check_types(&mut ast, &mut types);
+        assert!(check_types(&mut ast, &mut types).is_err());
     }
 }
