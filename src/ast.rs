@@ -52,7 +52,7 @@ pub struct Block {
 impl Block {
     pub fn new() -> Block {
         Block {
-            exprs: Vec::new(), // TODO: look up if you should set a capacity on Vec::new() or not
+            exprs: Vec::new(),
         }
     }
 }
@@ -91,6 +91,10 @@ impl Expr {
             ExprKind::Comparison(_, _, _) => {
                 compiler.visit_comparison(&self.kind, f);
             }
+            ExprKind::BoolConstant(_) => {
+                //println!("int constant");
+                compiler.visit_bool_constant(&self.kind, f);
+            }
             ExprKind::IntConstant(_) => {
                 //println!("int constant");
                 compiler.visit_int_constant(&self.kind, f);
@@ -117,6 +121,9 @@ impl Expr {
             ExprKind::NewAssignment(_, _) => {
                 compiler.visit_new_assignment(&self.kind, f);
             }
+            ExprKind::Reassignment(_, _) => {
+                compiler.visit_reassignment(&self.kind, f);
+            }
         }
     }
 }
@@ -133,9 +140,11 @@ pub struct FunctionExpr {
 pub enum ExprKind {
     Function(FunctionExpr),
     NewAssignment(String, Ptr<Expr>),
+    Reassignment(String, Ptr<Expr>),
     If(Ptr<Expr>, Ptr<Block>, Option<Ptr<Block>>),
     IntConstant(i64),
     StringConstant(String),
+    BoolConstant(bool),
     Return(Option<Ptr<Expr>>),
     Reference(String),
     Comparison(Ptr<Expr>, Ptr<Expr>, Comparison),

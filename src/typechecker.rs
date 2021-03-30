@@ -96,6 +96,15 @@ fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, 
             check_expr(func, v.ptr.deref(), expr_index, root, types)?;
             Ok(())
         }
+        ExprKind::Reassignment(ident, v) => {
+            check_expr(func, v.ptr.deref(), expr_index, root, types)?;
+            let re_typ = find_expr(func, v, expr_index, root, types)?;
+            let typ = find_reference(func, ident, expr_index, root, types)?;
+            if typ.id != re_typ.id {
+                return Err(format!("Cannot use {:?} for variable {} already defined as {:?}", re_typ.name, ident, typ.name));
+            }
+            Ok(())
+        }
         ExprKind::If(_if, v, e) => {
             check_expr(func, _if.ptr.deref(), expr_index, root, types)?;
             let if_type = find_expr(func, _if, expr_index, root, types)?;
@@ -109,6 +118,7 @@ fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, 
             }
             Ok(())
         }
+        ExprKind::BoolConstant(_) => Ok(()), // bool constant on its own can't have the wrong type
         ExprKind::IntConstant(_) => Ok(()), // int constant on its own can't have the wrong type
         ExprKind::StringConstant(_) => Ok(()), // string constant on its own can't have the wrong type
         ExprKind::Reference(_) => Ok(()),
@@ -168,10 +178,12 @@ fn find_expr(func: &FunctionExpr, expr: &Ptr<Expr>, expr_index: usize, root: &Ro
     Ok(match &expr.ptr.kind {
         ExprKind::Function(_) => types.unit(), // at a later point function declarations should be expressions
         ExprKind::If(_, _, _) => types.unit(), // for now, I do like the idea of ifs as expressions though
+        ExprKind::BoolConstant(_) => types.boolean(),
         ExprKind::IntConstant(_) => types.int64(),
         ExprKind::StringConstant(_) => types.string(),
         ExprKind::Comparison(_, _, _) => types.boolean(),
         ExprKind::NewAssignment(_, v) => find_expr(func, &v, expr_index, root, types)?,
+        ExprKind::Reassignment(_, v) => find_expr(func, &v, expr_index, root, types)?,
         ExprKind::Return(v) => {
             if let Some(v) = v {
                 find_expr(func, &v, expr_index, root, types)?
@@ -213,7 +225,7 @@ fn find_reference(func: &FunctionExpr, ident: &str, ref_index: usize, root: &Roo
     // 2. check arguments
     // 3. check global scope
 
-    for e in func.code.ptr.exprs.iter().take(ref_index) {
+    for e in func.code.ptr.exprs.iter().take(ref_index).rev() { // rev to get the closest one in case of shadowing
         match &e.kind {
             ExprKind::NewAssignment(n, v) => {
                 if n == ident {
@@ -230,7 +242,7 @@ fn find_reference(func: &FunctionExpr, ident: &str, ref_index: usize, root: &Roo
             return Ok(p.ptr.typ.clone());
         }
     }
-    Err("Could not find reference".into())
+    Err(format!("Could not find reference {}", ident))
 }
 
 fn binary_op_result_type_of(left: Type, right: Type, op: &BinaryOp, types: &TypeCollector) -> Result<Type,String> {
@@ -251,7 +263,7 @@ mod tests {
     use crate::types::TypeScope;
 
     #[test]
-    pub fn test() {
+    pub fn returning_correct_type_in_function_is_ok() {
         let code = r#"
         fn test(s: cool_type) -> cool_type {
             return s;
@@ -260,13 +272,12 @@ mod tests {
         println("hello!");"#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        types.try_define_type("_type", TypeScope::Global).unwrap();
         types.try_define_type("cool_type", TypeScope::Global).unwrap();
         assert!(check_types(&mut ast, &mut types).is_ok());
     }
 
     #[test]
-    pub fn test_negative() {
+    pub fn returning_wrong_type_in_function_is_err() {
         let code = r#"
         fn test(s: _type) -> cool_type {
             return s;
@@ -277,6 +288,163 @@ mod tests {
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
         types.try_define_type("_type", TypeScope::Global).unwrap();
         types.try_define_type("cool_type", TypeScope::Global).unwrap();
+        assert!(check_types(&mut ast, &mut types).is_err());
+    }
+
+    #[test]
+    pub fn returning_coerced_string_is_ok() {
+        let code = r#"
+        fn test(a: int, b: string) -> string {
+            return b + a;
+        }
+
+        hello := test(2,"hi");"#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_ok());
+    }
+
+    #[test]
+    pub fn returning_int_when_expecting_string_is_err() {
+        let code = r#"
+        fn test(a: int, b: int) -> string {
+            return b + a;
+        }
+
+        hello := test(2,3);"#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_err());
+    }
+
+    #[test]
+    pub fn if_expr_with_bool_result_is_ok() {
+        let code = r#"
+        if 1 == 1 { }
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_ok());
+    }
+
+    #[test]
+    pub fn if_string_expr_is_err() {
+        let code = r#"
+        if "true" { }
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_err());
+    }
+
+    #[test]
+    pub fn if_bool_expr_is_ok() {
+        let code = r#"
+        if true { }
+        if false { }
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_ok());
+    }
+
+    #[test]
+    pub fn local_reference_is_checked_is_ok() {
+        let code = r#"
+        val := 1;
+        if val == 500 { }
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_ok());
+    }
+
+    #[test]
+    pub fn local_reference_is_checked_is_err() {
+        let code = r#"
+        val := 1;
+        if val == "blue" { }
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_err());
+    }
+
+    #[test]
+    pub fn local_reference_in_function_is_checked_is_ok() {
+        let code = r#"
+        fn test() {
+            val := 1;
+            if val == 500 { }
+        }
+        test();
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_ok());
+    }
+
+    #[test]
+    pub fn local_reference_in_function_is_checked_is_err() {
+        let code = r#"
+        fn test() {
+            val := "blue";
+            if val == false { }
+        }
+        test();
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_err());
+    }
+
+    #[test]
+    pub fn shadowed_variable_is_ok() {
+        let code = r#"
+        fn test(val: int) {
+            val := "blue";
+            if val == "red" { }
+        }
+        test(1);
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_ok());
+    }
+
+    #[test]
+    pub fn shadowed_variable_is_err() {
+        let code = r#"
+        val := "blue";
+        val := 1;
+        if val == "red" { }
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_err());
+    }
+
+    #[test]
+    pub fn reassignment_is_ok() {
+        let code = r#"
+        val := "blue";
+        val = "red";
+        if val == "red" { }
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+        assert!(check_types(&mut ast, &mut types).is_ok());
+    }
+
+    #[test]
+    pub fn reassignment_is_err() {
+        let code = r#"
+        val := "blue";
+        val = 1;
+        if val == 2 { }
+        "#;
+        let lexer = crate::lexer::Lexer::new(code.into());
+        let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
         assert!(check_types(&mut ast, &mut types).is_err());
     }
 }

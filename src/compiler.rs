@@ -93,6 +93,17 @@ impl Compiler {
         }
     }
 
+    pub fn visit_reassignment(&mut self, assign: &ExprKind, func: &mut Function) {
+        match assign {
+            ExprKind::Reassignment(ident, expr) => {
+                expr.ptr.accept_in_function(self, func);
+                func.code.push(OpCodes::Push(Rc::new(Value::String(ident.clone()))));
+                func.code.push(OpCodes::SetVar)
+            }
+            _ => unreachable!(),
+        }
+    }
+
     pub fn visit_if(&mut self, _if: &ExprKind, func: &mut Function) {
         match _if {
             ExprKind::If(if_expr, true_block, else_block) => {
@@ -224,6 +235,14 @@ impl Compiler {
                 // push name
                 // call
             }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn visit_bool_constant(&mut self, b: &ExprKind, func: &mut Function) {
+        match b {
+            ExprKind::BoolConstant(boo) =>
+                func.code.push(OpCodes::Push(Rc::new(Value::bool(*boo)))),
             _ => unreachable!(),
         }
     }

@@ -231,6 +231,9 @@ impl Parser {
             (TokenType::Identifier(_), TokenType::Walrus) => {
                 self.parse_new_assignment()
             }
+            (TokenType::Identifier(_), TokenType::Equals) => {
+                self.parse_reassignment()
+            }
             _ => {
                 self.parse_binary_ops_1()
             }
@@ -242,6 +245,13 @@ impl Parser {
         self.require(TokenType::Walrus);
         let value = self.parse_or();
         Expr::new(ExprKind::NewAssignment(ident, Ptr(value)))
+    }
+
+    fn parse_reassignment(&mut self) -> Expr {
+        let ident = self.parse_full_identifier();
+        self.require(TokenType::Equals);
+        let value = self.parse_or();
+        Expr::new(ExprKind::Reassignment(ident, Ptr(value)))
     }
 
     fn parse_binary_ops_1(&mut self) -> Expr {
@@ -282,13 +292,23 @@ impl Parser {
     /// e.g. references, constants, etc
     fn parse_innermost_expr(&mut self) -> Expr {
         return match &self.buffer[0].typ {
+            TokenType::True => {
+                let expr = Expr::new(ExprKind::BoolConstant(true));
+                self.consume();
+                expr
+            }
+            TokenType::False => {
+                let expr = Expr::new(ExprKind::BoolConstant(false));
+                self.consume();
+                expr
+            }
             TokenType::Integer(val) => {
-                let expr = Expr::new(ExprKind::IntConstant(*val)); //, self.types.int64());
+                let expr = Expr::new(ExprKind::IntConstant(*val));
                 self.consume();
                 expr
             }
             TokenType::String(val) => {
-                let expr = Expr::new(ExprKind::StringConstant(val.clone())); //, self.types.string());
+                let expr = Expr::new(ExprKind::StringConstant(val.clone()));
                 self.consume();
                 expr
             }
@@ -315,7 +335,7 @@ impl Parser {
 
     fn parse_function_call(&mut self, ident: String) -> Expr {
         let arguments = self.parse_argument_list();
-        return Expr::new(ExprKind::FunctionCall(ident, arguments));
+        Expr::new(ExprKind::FunctionCall(ident, arguments))
     }
 
     fn parse_argument_list(&mut self) -> Vec<Ptr<Expr>> {

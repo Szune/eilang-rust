@@ -107,6 +107,8 @@ pub enum TokenType {
     If,
     Else,
     Return,
+    True,
+    False,
     /* Start Symbols */
     Comma,
     Dot,

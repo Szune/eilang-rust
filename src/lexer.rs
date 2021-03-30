@@ -55,7 +55,9 @@ impl Lexer {
                 "fn" => TokenType::Function,
                 "if" => TokenType::If,
                 "else" => TokenType::Else,
-                "return" => TokenType::Return
+                "return" => TokenType::Return,
+                "true" => TokenType::True,
+                "false" => TokenType::False
             ]
                 .iter()
                 .cloned()
