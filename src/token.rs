@@ -22,8 +22,8 @@ pub struct Token {
     pub col: u64,
 }
 
-
-const _EMPTY: Token = Token { // TODO: I'm not sure this does what I intend, look up static/const and determine how to make sure there's only one shared immutable reference to this instance, if I understand this correctly it'll just create a copy for every call anyway..
+const _EMPTY: Token = Token {
+    // TODO: I'm not sure this does what I intend, look up static/const and determine how to make sure there's only one shared immutable reference to this instance, if I understand this correctly it'll just create a copy for every call anyway..
     typ: TokenType::None,
     line: 0,
     col: 0,
@@ -34,16 +34,12 @@ impl Token {
         Token {
             typ,
             line: 0,
-            col: 0
+            col: 0,
         }
     }
 
     pub fn with_pos(typ: TokenType, line: u64, col: u64) -> Token {
-        Token {
-            typ,
-            line,
-            col
-        }
+        Token { typ, line, col }
     }
 
     pub fn empty() -> Token {
@@ -94,7 +90,6 @@ impl Token {
         println!("{:?}", self);
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {

@@ -16,13 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use crate::ast::*;
-use crate::function::{Function};
-use crate::ops::OpCodes;
-use crate::values::{Value};
-use std::convert::TryFrom;
 use crate::env::Env;
-use std::rc::Rc;
+use crate::function::Function;
+use crate::ops::OpCodes;
 use crate::types::TypeCollector;
+use crate::values::Value;
+use std::convert::TryFrom;
+use std::rc::Rc;
 
 macro_rules! assert_returns (
     ($ops:expr, $name:expr) => {
@@ -86,7 +86,8 @@ impl Compiler {
         match assign {
             ExprKind::NewAssignment(ident, expr) => {
                 expr.ptr.accept_in_function(self, func);
-                func.code.push(OpCodes::Push(Rc::new(Value::String(ident.clone()))));
+                func.code
+                    .push(OpCodes::Push(Rc::new(Value::String(ident.clone()))));
                 func.code.push(OpCodes::DefVar)
             }
             _ => unreachable!(),
@@ -97,7 +98,8 @@ impl Compiler {
         match assign {
             ExprKind::Reassignment(ident, expr) => {
                 expr.ptr.accept_in_function(self, func);
-                func.code.push(OpCodes::Push(Rc::new(Value::String(ident.clone()))));
+                func.code
+                    .push(OpCodes::Push(Rc::new(Value::String(ident.clone()))));
                 func.code.push(OpCodes::SetVar)
             }
             _ => unreachable!(),
@@ -127,7 +129,8 @@ impl Compiler {
 
                     // patch in jump past else block at end of true block
                     let end_block_addr = func.code.len() + 1;
-                    func.code.insert(true_block_end_jmp_addr, OpCodes::Jump(end_block_addr));
+                    func.code
+                        .insert(true_block_end_jmp_addr, OpCodes::Jump(end_block_addr));
                 } else {
                     if_expr.ptr.accept_in_function(self, func);
                     let op_addr = func.code.len();
@@ -137,7 +140,8 @@ impl Compiler {
 
                     let end_block_addr = func.code.len() + 1;
                     // patch in branch op
-                    func.code.insert(op_addr, OpCodes::BranchIfFalse(end_block_addr));
+                    func.code
+                        .insert(op_addr, OpCodes::BranchIfFalse(end_block_addr));
                 }
             }
             _ => unreachable!(),
@@ -147,8 +151,11 @@ impl Compiler {
     pub fn visit_function(&mut self, func: &ExprKind) {
         match func {
             ExprKind::Function(newf) => {
-                let mut f = Function::new(newf.name.clone(), newf.return_type.clone(),
-                                          &newf.parameters);
+                let mut f = Function::new(
+                    newf.name.clone(),
+                    newf.return_type.clone(),
+                    &newf.parameters,
+                );
                 //println!("Compiling function {}({:?}) -> {}", f.name, f.arguments, f.return_type);
                 for p in &f.parameters {
                     f.code.push(OpCodes::FunctionSetVar(p.name.clone()));
@@ -227,8 +234,11 @@ impl Compiler {
                 for a in args.iter().rev() {
                     (*a.ptr).accept_in_function(self, func);
                 }
-                func.code.push(OpCodes::Push(Rc::new(Value::int(i64::try_from(args.len()).unwrap()))));
-                func.code.push(OpCodes::Push(Rc::new(Value::string(name.clone()))));
+                func.code.push(OpCodes::Push(Rc::new(Value::int(
+                    i64::try_from(args.len()).unwrap(),
+                ))));
+                func.code
+                    .push(OpCodes::Push(Rc::new(Value::string(name.clone()))));
                 func.code.push(OpCodes::Call);
                 // push args
                 // push arg count
@@ -241,25 +251,25 @@ impl Compiler {
 
     pub fn visit_bool_constant(&mut self, b: &ExprKind, func: &mut Function) {
         match b {
-            ExprKind::BoolConstant(boo) =>
-                func.code.push(OpCodes::Push(Rc::new(Value::bool(*boo)))),
+            ExprKind::BoolConstant(boo) => {
+                func.code.push(OpCodes::Push(Rc::new(Value::bool(*boo))))
+            }
             _ => unreachable!(),
         }
     }
 
     pub fn visit_int_constant(&mut self, i: &ExprKind, func: &mut Function) {
         match i {
-            ExprKind::IntConstant(num) =>
-                func.code.push(OpCodes::Push(Rc::new(Value::int(*num)))),
+            ExprKind::IntConstant(num) => func.code.push(OpCodes::Push(Rc::new(Value::int(*num)))),
             _ => unreachable!(),
         }
     }
 
-
     pub fn visit_string_constant(&mut self, s: &ExprKind, func: &mut Function) {
         match s {
-            ExprKind::StringConstant(str) =>
-                func.code.push(OpCodes::Push(Rc::new(Value::string(str.clone())))),
+            ExprKind::StringConstant(str) => func
+                .code
+                .push(OpCodes::Push(Rc::new(Value::string(str.clone())))),
             _ => unreachable!(),
         }
     }

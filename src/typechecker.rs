@@ -15,11 +15,14 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::ast::{Root, ExprKind, Expr, FunctionExpr, Ptr, BinaryOp, Comparison, Block};
-use crate::types::{TypeCollector,Type};
+use crate::ast::{BinaryOp, Block, Comparison, Expr, ExprKind, FunctionExpr, Ptr, Root};
+use crate::types::{Type, TypeCollector};
 use std::ops::Deref;
 
-fn determine_types<'a>(root: &'a mut Root, types: &'a mut TypeCollector) -> (&'a mut Root, &'a mut TypeCollector) {
+fn determine_types<'a>(
+    root: &'a mut Root,
+    types: &'a mut TypeCollector,
+) -> (&'a mut Root, &'a mut TypeCollector) {
     macro_rules! assert_determined (
         ($t:path) => {
             if $t.is_indeterminate() {
@@ -39,13 +42,14 @@ fn determine_types<'a>(root: &'a mut Root, types: &'a mut TypeCollector) -> (&'a
                 }
                 for p in fun.parameters.iter_mut() {
                     if p.ptr.deref().typ.is_indeterminate() {
-                        let new_type = types.get_type(&p.ptr.deref().typ.name, &p.ptr.deref().typ.scope);
+                        let new_type =
+                            types.get_type(&p.ptr.deref().typ.name, &p.ptr.deref().typ.scope);
                         assert_determined!(new_type);
                         p.ptr.typ = new_type;
                     }
                 }
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
     // determine all indeterminate types
@@ -67,30 +71,43 @@ pub fn check_types(root: &mut Root, types: &mut TypeCollector) -> Result<(), Str
     Ok(())
 }
 
-fn check_block(func: &FunctionExpr, block: &Ptr<Block>, root: &Root, types: &TypeCollector) -> Result<(), String> {
+fn check_block(
+    func: &FunctionExpr,
+    block: &Ptr<Block>,
+    root: &Root,
+    types: &TypeCollector,
+) -> Result<(), String> {
     for (i, expr) in block.ptr.exprs.iter().enumerate() {
         check_expr(func, expr, i, root, types)?
     }
     Ok(())
 }
 
-fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, types: &TypeCollector) -> Result<(), String> {
+fn check_expr(
+    func: &FunctionExpr,
+    expr: &Expr,
+    expr_index: usize,
+    root: &Root,
+    types: &TypeCollector,
+) -> Result<(), String> {
     match &expr.kind {
-        ExprKind::Return(r) =>
-            {
-                if func.return_type.id == types.any().id {
-                    return Ok(());
-                }
-                if let Some(r) = r {
-                    let returned_type = find_expr(func, &r, expr_index, root, types)?;
-                    if returned_type.id != func.return_type.id {
-                        return Err(format!("Tried to return item of type {:?} in function {} expecting return type {:?}", returned_type, func.name, func.return_type));
-                    }
-                } else if func.return_type.id != types.unit().id {
-                    return Err(format!("Tried to return unit in function {} expecting return type {:?}", func.name, func.return_type));
-                }
-                Ok(())
+        ExprKind::Return(r) => {
+            if func.return_type.id == types.any().id {
+                return Ok(());
             }
+            if let Some(r) = r {
+                let returned_type = find_expr(func, &r, expr_index, root, types)?;
+                if returned_type.id != func.return_type.id {
+                    return Err(format!("Tried to return item of type {:?} in function {} expecting return type {:?}", returned_type, func.name, func.return_type));
+                }
+            } else if func.return_type.id != types.unit().id {
+                return Err(format!(
+                    "Tried to return unit in function {} expecting return type {:?}",
+                    func.name, func.return_type
+                ));
+            }
+            Ok(())
+        }
         ExprKind::Function(_) => Ok(()), // functions in functions are not implemented yet
         ExprKind::NewAssignment(_, v) => {
             check_expr(func, v.ptr.deref(), expr_index, root, types)?;
@@ -101,7 +118,10 @@ fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, 
             let re_typ = find_expr(func, v, expr_index, root, types)?;
             let typ = find_reference(func, ident, expr_index, root, types)?;
             if typ.id != re_typ.id {
-                return Err(format!("Cannot use {:?} for variable {} already defined as {:?}", re_typ.name, ident, typ.name));
+                return Err(format!(
+                    "Cannot use {:?} for variable {} already defined as {:?}",
+                    re_typ.name, ident, typ.name
+                ));
             }
             Ok(())
         }
@@ -109,7 +129,10 @@ fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, 
             check_expr(func, _if.ptr.deref(), expr_index, root, types)?;
             let if_type = find_expr(func, _if, expr_index, root, types)?;
             if if_type.id != types.boolean().id {
-                return Err(format!("Cannot use {:?} in an if statement because it is not a bool value", if_type.name));
+                return Err(format!(
+                    "Cannot use {:?} in an if statement because it is not a bool value",
+                    if_type.name
+                ));
             }
 
             check_block(func, v, root, types)?;
@@ -119,7 +142,7 @@ fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, 
             Ok(())
         }
         ExprKind::BoolConstant(_) => Ok(()), // bool constant on its own can't have the wrong type
-        ExprKind::IntConstant(_) => Ok(()), // int constant on its own can't have the wrong type
+        ExprKind::IntConstant(_) => Ok(()),  // int constant on its own can't have the wrong type
         ExprKind::StringConstant(_) => Ok(()), // string constant on its own can't have the wrong type
         ExprKind::Reference(_) => Ok(()),
         ExprKind::Comparison(l, r, op) => {
@@ -128,7 +151,10 @@ fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, 
             let l = find_expr(func, &l, expr_index, root, types)?;
             let r = find_expr(func, &r, expr_index, root, types)?;
             if !are_comparable(&l, &r, op, types) {
-                return Err(format!("Cannot {:?} compare a {:?} value with a {:?} value", op, l.name, r.name));
+                return Err(format!(
+                    "Cannot {:?} compare a {:?} value with a {:?} value",
+                    op, l.name, r.name
+                ));
             }
             Ok(())
         }
@@ -164,8 +190,14 @@ fn check_expr(func: &FunctionExpr, expr: &Expr, expr_index: usize, root: &Root, 
 
 fn are_comparable(left: &Type, right: &Type, op: &Comparison, types: &TypeCollector) -> bool {
     match (left.id, right.id) {
-        (l, r) if l == types.string().id && r == types.string().id
-            && *op != Comparison::Equals && *op != Comparison::NotEquals => false,
+        (l, r)
+            if l == types.string().id
+                && r == types.string().id
+                && *op != Comparison::Equals
+                && *op != Comparison::NotEquals =>
+        {
+            false
+        }
         (l, r) if l == types.string().id && r == types.string().id => true,
         (l, r) if l == types.int64().id && r == types.int64().id => true,
         (l, r) if l == r => true,
@@ -174,7 +206,13 @@ fn are_comparable(left: &Type, right: &Type, op: &Comparison, types: &TypeCollec
     }
 }
 
-fn find_expr(func: &FunctionExpr, expr: &Ptr<Expr>, expr_index: usize, root: &Root, types: &TypeCollector) -> Result<Type, String> {
+fn find_expr(
+    func: &FunctionExpr,
+    expr: &Ptr<Expr>,
+    expr_index: usize,
+    root: &Root,
+    types: &TypeCollector,
+) -> Result<Type, String> {
     Ok(match &expr.ptr.kind {
         ExprKind::Function(_) => types.unit(), // at a later point function declarations should be expressions
         ExprKind::If(_, _, _) => types.unit(), // for now, I do like the idea of ifs as expressions though
@@ -190,52 +228,57 @@ fn find_expr(func: &FunctionExpr, expr: &Ptr<Expr>, expr_index: usize, root: &Ro
             } else {
                 types.unit()
             }
-        },
-        ExprKind::Reference(ident) => {
-            find_reference(func, &ident, expr_index, root, types)?
         }
+        ExprKind::Reference(ident) => find_reference(func, &ident, expr_index, root, types)?,
         ExprKind::BinaryOp(left, right, op) => {
             let left = find_expr(func, &left, expr_index, root, types)?;
             let right = find_expr(func, &right, expr_index, root, types)?;
             binary_op_result_type_of(left, right, op, types)?
         }
-        ExprKind::FunctionCall(func_to_call, _) => {
-            find_function(func_to_call.as_str(), root)?
-                .return_type
-                .clone()
-        }
+        ExprKind::FunctionCall(func_to_call, _) => find_function(func_to_call.as_str(), root)?
+            .return_type
+            .clone(),
     })
 }
 
 fn find_function<'a>(name: &str, root: &'a Root) -> Result<&'a FunctionExpr, String> {
-    if let Some(fun) = root.functions.iter()
+    if let Some(fun) = root
+        .functions
+        .iter()
         .map(|f| match &f.kind {
             ExprKind::Function(f) => f,
-            _ => unreachable!()
+            _ => unreachable!(),
         })
-        .find(|p| p.name == name) {
+        .find(|p| p.name == name)
+    {
         Ok(fun)
     } else {
         Err(format!("Could not find function {}", name))
     }
 }
 
-fn find_reference(func: &FunctionExpr, ident: &str, ref_index: usize, root: &Root, types: &TypeCollector) -> Result<Type, String> {
+fn find_reference(
+    func: &FunctionExpr,
+    ident: &str,
+    ref_index: usize,
+    root: &Root,
+    types: &TypeCollector,
+) -> Result<Type, String> {
     // 1. check local scope
     // 2. check arguments
     // 3. check global scope
 
-    for e in func.code.ptr.exprs.iter().take(ref_index).rev() { // rev to get the closest one in case of shadowing
+    for e in func.code.ptr.exprs.iter().take(ref_index).rev() {
+        // rev to get the closest one in case of shadowing
         match &e.kind {
             ExprKind::NewAssignment(n, v) => {
                 if n == ident {
                     return find_expr(func, v, ref_index, root, types);
                 }
             }
-            _ => ()
+            _ => (),
         }
     }
-
 
     for p in &func.parameters {
         if p.ptr.name == ident {
@@ -245,17 +288,24 @@ fn find_reference(func: &FunctionExpr, ident: &str, ref_index: usize, root: &Roo
     Err(format!("Could not find reference {}", ident))
 }
 
-fn binary_op_result_type_of(left: Type, right: Type, op: &BinaryOp, types: &TypeCollector) -> Result<Type,String> {
+fn binary_op_result_type_of(
+    left: Type,
+    right: Type,
+    op: &BinaryOp,
+    types: &TypeCollector,
+) -> Result<Type, String> {
     // TODO: rewrite this to be more performant, the current iteration is pretty awful
     match (left.id, right.id) {
         (l, _) if l == types.string().id => Ok(types.string()),
         (l, r) if l == types.int64().id && r == types.int64().id => Ok(types.int64()),
         (l, r) if l == r => Ok(left),
-        (l, r) if l != r => Err(format!("incompatible types in binary op {:?} ({} and {})", op, left.name, right.name)),
-        (_, _) => Ok(types.unit())
+        (l, r) if l != r => Err(format!(
+            "incompatible types in binary op {:?} ({} and {})",
+            op, left.name, right.name
+        )),
+        (_, _) => Ok(types.unit()),
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -272,7 +322,9 @@ mod tests {
         println("hello!");"#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        types.try_define_type("cool_type", TypeScope::Global).unwrap();
+        types
+            .try_define_type("cool_type", TypeScope::Global)
+            .unwrap();
         assert!(check_types(&mut ast, &mut types).is_ok());
     }
 
@@ -287,7 +339,9 @@ mod tests {
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
         types.try_define_type("_type", TypeScope::Global).unwrap();
-        types.try_define_type("cool_type", TypeScope::Global).unwrap();
+        types
+            .try_define_type("cool_type", TypeScope::Global)
+            .unwrap();
         assert!(check_types(&mut ast, &mut types).is_err());
     }
 

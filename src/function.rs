@@ -15,12 +15,12 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::ops::OpCodes;
 use crate::ast::Ptr;
-use std::ops::Deref;
+use crate::ops::OpCodes;
 use crate::types::Type;
+use std::ops::Deref;
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Parameter {
     pub name: String,
     pub typ: Type,
@@ -39,9 +39,7 @@ impl Function {
         Function {
             name,
             return_type,
-            parameters: arguments.iter()
-                .map(|f| f.ptr.deref().clone())
-                .collect(),
+            parameters: arguments.iter().map(|f| f.ptr.deref().clone()).collect(),
             code: Vec::new(),
         }
     }

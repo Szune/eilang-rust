@@ -15,23 +15,23 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-pub mod token;
-pub mod lexer;
-pub mod parser;
 pub mod ast;
 pub mod compiler;
-pub mod values;
-pub mod ops;
-pub mod function;
 pub mod env;
+pub mod function;
 pub mod interpreter;
-pub mod types;
+pub mod lexer;
+pub mod ops;
+pub mod parser;
+pub mod token;
 pub mod typechecker;
+pub mod types;
+pub mod values;
 
-use lexer::Lexer;
-use parser::Parser;
 use compiler::Compiler;
 use interpreter::Interpreter;
+use lexer::Lexer;
+use parser::Parser;
 
 fn main() {
     // implement different types of chars for different encodings?
@@ -110,7 +110,8 @@ fn main() {
         hello := "hello";
         world := "world!";
         println($"{hello} from {world}");
-        "#)); // "fn add() -> int { return 5 + 10; }"
+        "#,
+    )); // "fn add() -> int { return 5 + 10; }"
     let (mut ast, mut types) = Parser::parse(lexer_for_parser);
     //println!("Parsed AST: {:#?}", ast);
     /*

@@ -40,11 +40,7 @@ pub struct Type {
 
 impl Type {
     pub fn new(id: Id, name: String, scope: TypeScope) -> Type {
-        Type {
-            id,
-            name,
-            scope,
-        }
+        Type { id, name, scope }
     }
 
     #[inline(always)]
@@ -119,13 +115,27 @@ impl TypeCollector {
             items_id: HashMap::new(),
             id_counter: FUNCTION + 1,
         };
-        collector.try_define_type(Self::VOID, TypeScope::Global).unwrap();
-        collector.try_define_type(Self::ANY, TypeScope::Global).unwrap();
-        collector.try_define_type(Self::STRING, TypeScope::Global).unwrap();
-        collector.try_define_type(Self::INT64, TypeScope::Global).unwrap();
-        collector.try_define_type(Self::DOUBLE, TypeScope::Global).unwrap();
-        collector.try_define_type(Self::BOOLEAN, TypeScope::Global).unwrap();
-        collector.try_define_type(Self::UNIT, TypeScope::Global).unwrap();
+        collector
+            .try_define_type(Self::VOID, TypeScope::Global)
+            .unwrap();
+        collector
+            .try_define_type(Self::ANY, TypeScope::Global)
+            .unwrap();
+        collector
+            .try_define_type(Self::STRING, TypeScope::Global)
+            .unwrap();
+        collector
+            .try_define_type(Self::INT64, TypeScope::Global)
+            .unwrap();
+        collector
+            .try_define_type(Self::DOUBLE, TypeScope::Global)
+            .unwrap();
+        collector
+            .try_define_type(Self::BOOLEAN, TypeScope::Global)
+            .unwrap();
+        collector
+            .try_define_type(Self::UNIT, TypeScope::Global)
+            .unwrap();
         collector
     }
 
@@ -166,13 +176,20 @@ impl TypeCollector {
     }
 
     pub fn try_define_type(&mut self, name: &str, scope: TypeScope) -> Result<(), ()> {
-        let type_def = TypeDef { name: name.into(), scope: scope.clone() };
+        let type_def = TypeDef {
+            name: name.into(),
+            scope: scope.clone(),
+        };
         if self.items.contains_key(&type_def) {
             Err(())
         } else {
             let id = self.id_counter + 1;
             self.id_counter = id;
-            let typ = Type { id, name: name.into(), scope };
+            let typ = Type {
+                id,
+                name: name.into(),
+                scope,
+            };
             self.items.insert(type_def, typ.clone());
             self.items_id.insert(id, typ);
             Ok(())
@@ -183,23 +200,30 @@ impl TypeCollector {
         // try to get closest type first, e.g. current module scope before global scope
         // TODO: reduce cloning
         match scope {
-            TypeScope::Global => {
-                self.items.get(&{ TypeDef { name: name.into(), scope: scope.clone() } })
-                    .map(|t| t.clone())
-                    .unwrap_or(Self::new_indeterminate_type(name, scope.clone()))
-            }
-            TypeScope::Module(_) => {
-                self.items.get(&{ TypeDef { name: name.into(), scope: scope.clone() } })
-                    .map_or_else(
-                        || self.get_type(name, &TypeScope::Global),
-                        |t| t.clone())
-            }
+            TypeScope::Global => self
+                .items
+                .get(&{
+                    TypeDef {
+                        name: name.into(),
+                        scope: scope.clone(),
+                    }
+                })
+                .map(|t| t.clone())
+                .unwrap_or(Self::new_indeterminate_type(name, scope.clone())),
+            TypeScope::Module(_) => self
+                .items
+                .get(&{
+                    TypeDef {
+                        name: name.into(),
+                        scope: scope.clone(),
+                    }
+                })
+                .map_or_else(|| self.get_type(name, &TypeScope::Global), |t| t.clone()),
         }
     }
 
     pub fn try_get_type_by_id(&self, id: Id) -> Option<Type> {
-        self.items_id.get(&id)
-            .map(|t| t.clone())
+        self.items_id.get(&id).map(|t| t.clone())
     }
 }
 
@@ -220,13 +244,13 @@ mod tests {
     );
 
     /* make sure the basic types are created */
-    test_gen!(void,VOID);
-    test_gen!(any,ANY);
-    test_gen!(string,STRING);
-    test_gen!(int64,INT64);
-    test_gen!(double,DOUBLE);
-    test_gen!(boolean,BOOLEAN);
-    test_gen!(unit,UNIT);
+    test_gen!(void, VOID);
+    test_gen!(any, ANY);
+    test_gen!(string, STRING);
+    test_gen!(int64, INT64);
+    test_gen!(double, DOUBLE);
+    test_gen!(boolean, BOOLEAN);
+    test_gen!(unit, UNIT);
 
     #[test]
     pub fn types_get_different_ids() {

@@ -19,11 +19,11 @@ use crate::env::Env;
 use crate::function::Function;
 use crate::ops::OpCodes;
 use crate::values::Value;
-use std::ops::{Deref};
-use std::rc::Rc;
-use std::collections::HashMap;
-use std::borrow::{Borrow};
+use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::ops::Deref;
+use std::rc::Rc;
 
 pub struct Scope {
     vars: HashMap<String, Rc<Value>>,
@@ -45,10 +45,10 @@ impl Scope {
         }
     }
 
-
     /// Define variable in current scope
     pub fn define_variable(&mut self, var: String, val: Rc<Value>) {
-        self.vars.entry(var)
+        self.vars
+            .entry(var)
             .and_modify(|e| *e = Rc::clone(&val))
             .or_insert_with(|| Rc::clone(&val));
     }
@@ -86,7 +86,7 @@ impl Scope {
 
         // bit of a mess
         let parent = Rc::clone(&self.parent);
-        let borrowed : &RefCell<Option<Scope>> = parent.borrow();
+        let borrowed: &RefCell<Option<Scope>> = parent.borrow();
         let live = match *borrowed.borrow() {
             Some(ref s) => s.get_variable(var),
             None => panic!("Variable {} has not been defined yet.", &var),
@@ -94,7 +94,6 @@ impl Scope {
         live
     }
 }
-
 
 pub struct CallFrame {
     addr: Cell<usize>,
@@ -106,7 +105,9 @@ pub struct Interpreter {}
 
 impl Interpreter {
     pub fn interpret(env: Env) {
-        let main = env.get_function(".main".into()).expect("Missing a main function");
+        let main = env
+            .get_function(".main".into())
+            .expect("Missing a main function");
         let mut stack = Vec::<Rc<Value>>::new();
         let scopes = &mut Vec::<Scope>::new();
         scopes.push(Scope::new());
@@ -122,13 +123,17 @@ impl Interpreter {
 
         while !frames.is_empty() {
             let frame = &mut frames.last().unwrap();
-            let op = frame.func.code.get(frame.addr.get())
-                .expect(format!("Addr {} out of bounds, total opcodes {}", frame.addr.get(), frame.func.code.len()).as_str());
+            let op = frame.func.code.get(frame.addr.get()).expect(
+                format!(
+                    "Addr {} out of bounds, total opcodes {}",
+                    frame.addr.get(),
+                    frame.func.code.len()
+                )
+                .as_str(),
+            );
             //println!("on addr {}", frame.addr.get());
             match op {
-                OpCodes::Add => {
-                    Interpreter::op_code_add(&mut stack)
-                }
+                OpCodes::Add => Interpreter::op_code_add(&mut stack),
                 OpCodes::Subtract => {
                     let right = stack.pop();
                     let left = stack.pop();
@@ -154,7 +159,8 @@ impl Interpreter {
                     };
                     let fr = CallFrame {
                         addr: Cell::new(0usize),
-                        func: env.get_function(name.clone())
+                        func: env
+                            .get_function(name.clone())
                             .expect(format!("Function {} not found", name.clone()).as_str()),
                         called_with_arg_count: arg_count,
                     };
@@ -256,7 +262,11 @@ impl Interpreter {
             }
             //println!("stack: {:?}", stack);
             if !skip_inc {
-                frames.last().unwrap().addr.set(frames.last().unwrap().addr.get() + 1);
+                frames
+                    .last()
+                    .unwrap()
+                    .addr
+                    .set(frames.last().unwrap().addr.get() + 1);
             } else {
                 skip_inc = false;
             }
@@ -392,7 +402,7 @@ impl Interpreter {
             Value::String(l) => match right {
                 Value::String(r) => l == r,
                 _ => unimplemented!(),
-            }
+            },
             _ => unimplemented!(),
         };
 
@@ -418,7 +428,9 @@ impl Interpreter {
                 }
                 Value::Integer(r) => {
                     // this can't be the right way to do it...
-                    stack.push(Rc::new(Value::string(l.clone() + format!("{}", &r.clone()).as_str())));
+                    stack.push(Rc::new(Value::string(
+                        l.clone() + format!("{}", &r.clone()).as_str(),
+                    )));
                 }
                 _ => unimplemented!(),
             },
@@ -429,24 +441,17 @@ impl Interpreter {
 
 fn get_printable_value(value: Rc<Value>) -> String {
     match value.borrow() {
-        Value::Unit => {
-            "{}".into()
-        }
+        Value::Unit => "{}".into(),
         Value::Integer(i) => {
             format!("{}", i)
         }
         Value::Double(d) => {
             format!("{}", d)
         }
-        Value::String(s) => {
-            s.clone()
-        }
-        Value::Bool(b) => {
-            b.to_string()
-        }
+        Value::String(s) => s.clone(),
+        Value::Bool(b) => b.to_string(),
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -457,9 +462,11 @@ mod tests {
     pub fn test_println() {
         let types = TypeCollector::new();
         let mut main = Function::new(".main".into(), types.any(), &Vec::new());
-        main.code.push(OpCodes::Push(Rc::new(Value::String("Hello world".into()))));
+        main.code
+            .push(OpCodes::Push(Rc::new(Value::String("Hello world".into()))));
         main.code.push(OpCodes::Push(Rc::new(Value::Integer(1))));
-        main.code.push(OpCodes::Push(Rc::new(Value::String("println".into()))));
+        main.code
+            .push(OpCodes::Push(Rc::new(Value::String("println".into()))));
         main.code.push(OpCodes::Call);
         main.code.push(OpCodes::Return);
         let mut env = Env::new(types);

@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use crate::token::*;
+use crate::types::TypeCollector;
 use std::collections::{HashMap, VecDeque};
 use std::iter::FromIterator;
-use crate::types::TypeCollector;
 
 macro_rules! keywords (
     ($($str:expr => $token:expr),*) => {
@@ -59,9 +59,9 @@ impl Lexer {
                 "true" => TokenType::True,
                 "false" => TokenType::False
             ]
-                .iter()
-                .cloned()
-                .collect(),
+            .iter()
+            .cloned()
+            .collect(),
         };
         lexer.consume();
         lexer.consume();
@@ -95,7 +95,7 @@ impl Lexer {
                         return self.queue.pop_front().unwrap();
                     }
                     _ => unimplemented!(),
-                }
+                },
                 '(' => tok = Token!(TokenType::LeftParenthesis),
                 ')' => tok = Token!(TokenType::RightParenthesis),
                 ',' => tok = Token!(TokenType::Comma),
@@ -122,14 +122,14 @@ impl Lexer {
                         self.consume();
                     }
                     _ => tok = Token!(TokenType::LessThan),
-                }
+                },
                 '>' => match self.buffer[1] {
                     '=' => {
                         tok = Token!(TokenType::GreaterThanEquals);
                         self.consume();
                     }
                     _ => tok = Token!(TokenType::GreaterThan),
-                }
+                },
                 '&' => match self.buffer[1] {
                     '&' => {
                         tok = Token!(TokenType::And);
@@ -157,7 +157,7 @@ impl Lexer {
                         self.consume();
                     }
                     _ => tok = Token!(TokenType::Equals),
-                }
+                },
                 '*' => tok = Token!(TokenType::Asterisk),
                 '/' => match self.buffer[1] {
                     '/' => {
@@ -181,13 +181,15 @@ impl Lexer {
                         tok = Token!(TokenType::Arrow)
                     }
                     _ => tok = Token!(TokenType::Dash),
-                }
-                ,
+                },
                 '0'..='9' => return self.get_number(),
                 '"' => return self.get_string(),
                 'A'..='Z' | 'a'..='z' | '_' => return self.get_identifier_or_keyword(),
                 _ => {
-                    let unknown = TokenType::Unknown(String::from(format!("b[0] = {} --- b[1] = {}", self.buffer[0], self.buffer[1])));
+                    let unknown = TokenType::Unknown(String::from(format!(
+                        "b[0] = {} --- b[1] = {}",
+                        self.buffer[0], self.buffer[1]
+                    )));
                     tok = Token!(unknown);
                 }
             };
@@ -204,7 +206,7 @@ impl Lexer {
         let mut sb = Vec::new();
         sb.push(self.buffer[0]); // add first (no need to check for dash)
         self.consume();
-        while matches!(self.buffer[0], '0' ..= '9') {
+        while matches!(self.buffer[0], '0'..='9') {
             sb.push(self.buffer[0]);
             self.consume();
         }
@@ -217,11 +219,7 @@ impl Lexer {
         let mut sb = Vec::new();
         sb.push(self.buffer[0]); // add first
         self.consume();
-        while matches!(self.buffer[0], 
-            'A' ..= 'Z'
-            | 'a' ..= 'z'
-            | '0' ..= '9'
-            | '_') {
+        while matches!(self.buffer[0], 'A' ..= 'Z' | 'a' ..= 'z' | '0' ..= '9' | '_') {
             sb.push(self.buffer[0]);
             self.consume();
         }
@@ -233,16 +231,20 @@ impl Lexer {
     }
 
     fn replace_builtin_aliases(&mut self, ident: String) -> Token {
-        Token::with_pos(TokenType::Identifier(match ident.as_str() {
-            "string" => TypeCollector::STRING.into(),
-            "bool" => TypeCollector::BOOLEAN.into(),
-            "int" => TypeCollector::INT64.into(),
-            "double" => TypeCollector::DOUBLE.into(),
-            "unit" => TypeCollector::UNIT.into(),
-            "void" => TypeCollector::VOID.into(),
-            "any" => TypeCollector::ANY.into(),
-            _ => ident
-        }), self.line, self.col)
+        Token::with_pos(
+            TokenType::Identifier(match ident.as_str() {
+                "string" => TypeCollector::STRING.into(),
+                "bool" => TypeCollector::BOOLEAN.into(),
+                "int" => TypeCollector::INT64.into(),
+                "double" => TypeCollector::DOUBLE.into(),
+                "unit" => TypeCollector::UNIT.into(),
+                "void" => TypeCollector::VOID.into(),
+                "any" => TypeCollector::ANY.into(),
+                _ => ident,
+            }),
+            self.line,
+            self.col,
+        )
     }
 
     fn get_string(&mut self) -> Token {
@@ -276,12 +278,16 @@ impl Lexer {
                     self.consume();
                     sb.push('\\');
                 }
-                (_, _) => sb.push(self.buffer[0])
+                (_, _) => sb.push(self.buffer[0]),
             }
             self.consume();
         }
         self.consume(); // consume last "
-        return Token::with_pos(TokenType::String(String::from_iter(sb)), self.line, self.col);
+        return Token::with_pos(
+            TokenType::String(String::from_iter(sb)),
+            self.line,
+            self.col,
+        );
     }
 
     fn queue_interpolated_string(&mut self) {
@@ -293,7 +299,10 @@ impl Lexer {
         let mut sb = Vec::new();
         while self.buffer[0] != '"' {
             if self.eof {
-                panic!("Unterminated interpolated string on line {} col {}", line, col);
+                panic!(
+                    "Unterminated interpolated string on line {} col {}",
+                    line, col
+                );
             }
             match (self.buffer[0], self.buffer[1]) {
                 /* escaped chars */
@@ -318,7 +327,10 @@ impl Lexer {
                     self.consume();
                     sb.push('}');
                 }
-                ('}', _) => panic!("{}", "Invalid state of interpolated string, '}' found before '{'"),
+                ('}', _) => panic!(
+                    "{}",
+                    "Invalid state of interpolated string, '}' found before '{'"
+                ),
                 ('{', '{') => {
                     self.consume();
                     sb.push('{');
@@ -327,12 +339,22 @@ impl Lexer {
                 ('{', _) => {
                     // interpolated tokens here
                     if !self.queue.is_empty() {
-                        self.queue.push_back(Token::with_pos(TokenType::Plus, self.line, self.col));
+                        self.queue
+                            .push_back(Token::with_pos(TokenType::Plus, self.line, self.col));
                     }
-                    self.queue.push_back(Token::with_pos(TokenType::String(String::from_iter(sb)), self.line, self.col));
-                    self.queue.push_back(Token::with_pos(TokenType::Plus, self.line, self.col));
+                    self.queue.push_back(Token::with_pos(
+                        TokenType::String(String::from_iter(sb)),
+                        self.line,
+                        self.col,
+                    ));
+                    self.queue
+                        .push_back(Token::with_pos(TokenType::Plus, self.line, self.col));
                     // implicitly put parentheses around value
-                    self.queue.push_back(Token::with_pos(TokenType::LeftParenthesis, self.line, self.col));
+                    self.queue.push_back(Token::with_pos(
+                        TokenType::LeftParenthesis,
+                        self.line,
+                        self.col,
+                    ));
                     sb = Vec::new();
                     self.consume();
 
@@ -340,10 +362,14 @@ impl Lexer {
                         let next_token = self.next_token_no_queue();
                         self.queue.push_back(next_token);
                     }
-                    self.queue.push_back(Token::with_pos(TokenType::RightParenthesis, self.line, self.col));
+                    self.queue.push_back(Token::with_pos(
+                        TokenType::RightParenthesis,
+                        self.line,
+                        self.col,
+                    ));
                 }
                 /* any char */
-                (_, _) => sb.push(self.buffer[0])
+                (_, _) => sb.push(self.buffer[0]),
             }
 
             // consume char
@@ -351,15 +377,24 @@ impl Lexer {
         }
 
         if self.queue.is_empty() {
-            self.queue.push_back(Token::with_pos(TokenType::String(String::from_iter(sb)), line, col));
+            self.queue.push_back(Token::with_pos(
+                TokenType::String(String::from_iter(sb)),
+                line,
+                col,
+            ));
             self.consume(); // "
             return;
         }
 
         if self.queue.back().unwrap().typ != TokenType::Plus {
-            self.queue.push_back(Token::with_pos(TokenType::Plus, self.line, self.col));
+            self.queue
+                .push_back(Token::with_pos(TokenType::Plus, self.line, self.col));
         }
-        self.queue.push_back(Token::with_pos(TokenType::String(String::from_iter(sb)), self.line, self.col));
+        self.queue.push_back(Token::with_pos(
+            TokenType::String(String::from_iter(sb)),
+            self.line,
+            self.col,
+        ));
 
         self.consume(); // "
     }

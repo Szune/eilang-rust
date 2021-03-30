@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use crate::ast::*;
+use crate::function::Parameter;
 use crate::lexer::Lexer;
 use crate::token::*;
 use crate::types::{TypeCollector, TypeScope};
 use std::ops::Deref;
-use crate::function::Parameter;
 
 pub struct Parser {
     lexer: Lexer,
@@ -30,7 +30,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn parse(lexer: Lexer) -> (Root,TypeCollector) {
+    pub fn parse(lexer: Lexer) -> (Root, TypeCollector) {
         let mut parser = Parser {
             lexer,
             buffer: [Token::empty(), Token::empty()],
@@ -40,7 +40,7 @@ impl Parser {
         parser.consume();
         parser.consume();
         parser.parse_private();
-        return (parser.root,parser.types);
+        return (parser.root, parser.types);
     }
 
     fn parse_private(&mut self) {
@@ -65,12 +65,13 @@ impl Parser {
         }
         global_block.exprs.push(Expr::new(ExprKind::Return(None)));
         let any = self.types.any();
-        self.root.functions.push(
-            Expr::new(ExprKind::Function(FunctionExpr {
+        self.root
+            .functions
+            .push(Expr::new(ExprKind::Function(FunctionExpr {
                 name: ".main".into(),
                 return_type: any.clone(),
                 parameters: Vec::new(),
-                code: Ptr(global_block)
+                code: Ptr(global_block),
             })));
     }
 
@@ -79,17 +80,14 @@ impl Parser {
         let ident = self.parse_full_identifier();
         //println!("function identifier: {}", ident.string.clone().unwrap());
         let parameters = self.parse_parameter_list();
-        let parameters = parameters.iter()
+        let parameters = parameters
+            .iter()
             .map(|p| {
                 let (arg, typ) = p.ptr.deref().clone();
-                let typ =
-                    self.types
-                        .get_type(&typ, &TypeScope::Global);
-                Ptr(Parameter {
-                    name: arg,
-                    typ,
-                })
-            }).collect();
+                let typ = self.types.get_type(&typ, &TypeScope::Global);
+                Ptr(Parameter { name: arg, typ })
+            })
+            .collect();
         let return_type = if self.is_token(TokenType::Arrow) {
             self.require(TokenType::Arrow);
             let return_type = self.parse_full_identifier();
@@ -140,14 +138,13 @@ impl Parser {
                 self.consume();
                 let if_expr = self.parse_or();
                 let true_block = self.parse_block();
-                let else_block =
-                    match self.buffer[0].typ {
-                        TokenType::Else => {
-                            self.consume();
-                            Some(self.parse_block())
-                        }
-                        _ => None,
-                    };
+                let else_block = match self.buffer[0].typ {
+                    TokenType::Else => {
+                        self.consume();
+                        Some(self.parse_block())
+                    }
+                    _ => None,
+                };
 
                 return Expr::new(ExprKind::If(Ptr(if_expr), true_block, else_block));
             }
@@ -185,15 +182,26 @@ impl Parser {
 
     fn parse_equality_comparisons(&mut self) -> Expr {
         let mut expr = self.parse_difference_comparisons();
-        while matches!(self.buffer[0].typ, TokenType::EqualsEquals | TokenType::NotEquals) {
+        while matches!(
+            self.buffer[0].typ,
+            TokenType::EqualsEquals | TokenType::NotEquals
+        ) {
             if self.is_token(TokenType::EqualsEquals) {
                 self.consume();
                 let right = self.parse_difference_comparisons();
-                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::Equals))
+                expr = Expr::new(ExprKind::Comparison(
+                    Ptr(expr),
+                    Ptr(right),
+                    Comparison::Equals,
+                ))
             } else if self.is_token(TokenType::NotEquals) {
                 self.consume();
                 let right = self.parse_difference_comparisons();
-                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::NotEquals))
+                expr = Expr::new(ExprKind::Comparison(
+                    Ptr(expr),
+                    Ptr(right),
+                    Comparison::NotEquals,
+                ))
             }
         }
         expr
@@ -202,24 +210,45 @@ impl Parser {
     fn parse_difference_comparisons(&mut self) -> Expr {
         let mut expr = self.parse_binary_ops_1();
 
-        while matches!(self.buffer[0].typ,
-         TokenType::LessThan | TokenType::GreaterThan | TokenType::LessThanEquals | TokenType::GreaterThanEquals) {
+        while matches!(
+            self.buffer[0].typ,
+            TokenType::LessThan
+                | TokenType::GreaterThan
+                | TokenType::LessThanEquals
+                | TokenType::GreaterThanEquals
+        ) {
             if self.is_token(TokenType::LessThan) {
                 self.consume();
                 let right = self.parse_binary_ops_1();
-                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::LessThan))
+                expr = Expr::new(ExprKind::Comparison(
+                    Ptr(expr),
+                    Ptr(right),
+                    Comparison::LessThan,
+                ))
             } else if self.is_token(TokenType::GreaterThan) {
                 self.consume();
                 let right = self.parse_binary_ops_1();
-                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::GreaterThan))
+                expr = Expr::new(ExprKind::Comparison(
+                    Ptr(expr),
+                    Ptr(right),
+                    Comparison::GreaterThan,
+                ))
             } else if self.is_token(TokenType::LessThanEquals) {
                 self.consume();
                 let right = self.parse_binary_ops_1();
-                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::LessThanEquals))
+                expr = Expr::new(ExprKind::Comparison(
+                    Ptr(expr),
+                    Ptr(right),
+                    Comparison::LessThanEquals,
+                ))
             } else if self.is_token(TokenType::GreaterThanEquals) {
                 self.consume();
                 let right = self.parse_binary_ops_1();
-                expr = Expr::new(ExprKind::Comparison(Ptr(expr), Ptr(right), Comparison::GreaterThanEquals))
+                expr = Expr::new(ExprKind::Comparison(
+                    Ptr(expr),
+                    Ptr(right),
+                    Comparison::GreaterThanEquals,
+                ))
             }
         }
         expr
@@ -228,15 +257,9 @@ impl Parser {
     /// e.g. binary ops, etc
     fn parse_outermost_expr(&mut self) -> Expr {
         match (&self.buffer[0].typ, &self.buffer[1].typ) {
-            (TokenType::Identifier(_), TokenType::Walrus) => {
-                self.parse_new_assignment()
-            }
-            (TokenType::Identifier(_), TokenType::Equals) => {
-                self.parse_reassignment()
-            }
-            _ => {
-                self.parse_binary_ops_1()
-            }
+            (TokenType::Identifier(_), TokenType::Walrus) => self.parse_new_assignment(),
+            (TokenType::Identifier(_), TokenType::Equals) => self.parse_reassignment(),
+            _ => self.parse_binary_ops_1(),
         }
     }
 
@@ -360,7 +383,7 @@ impl Parser {
                 self.consume();
                 ret
             }
-            t => panic!("expected identifier, was {:#?}", t)
+            t => panic!("expected identifier, was {:#?}", t),
         }
     }
 
@@ -410,7 +433,6 @@ impl Parser {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,19 +441,23 @@ mod tests {
     pub fn string_constant() {
         let lexer = Lexer::new("\"hello\"".into());
         let (root, _) = Parser::parse(lexer);
-        let main =
-            root.functions.iter()
-                .map(|f| match &f.kind {
-                    ExprKind::Function(f) => f,
-                    _ => unreachable!(),
-                })
-                .filter(|f| f.name == ".main")
-                .next()
-                .unwrap();
+        let main = root
+            .functions
+            .iter()
+            .map(|f| match &f.kind {
+                ExprKind::Function(f) => f,
+                _ => unreachable!(),
+            })
+            .filter(|f| f.name == ".main")
+            .next()
+            .unwrap();
 
         match main.code.ptr.exprs.first().unwrap().kind {
-            ExprKind::StringConstant(_) => {}, // as expected
-            _ => assert!(false, "String constant did not parse into a string constant expression AST node"),
+            ExprKind::StringConstant(_) => {} // as expected
+            _ => assert!(
+                false,
+                "String constant did not parse into a string constant expression AST node"
+            ),
         }
     }
 }

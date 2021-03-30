@@ -25,10 +25,9 @@ pub struct Ptr<T: ?Sized> {
 }
 
 #[allow(non_snake_case)]
-pub fn Ptr<T>(val: T) -> Ptr<T> { // consider changing to a non-static lifetime of the AST
-    Ptr {
-        ptr: Box::new(val)
-    }
+pub fn Ptr<T>(val: T) -> Ptr<T> {
+    // consider changing to a non-static lifetime of the AST
+    Ptr { ptr: Box::new(val) }
 }
 
 #[derive(Debug)]
@@ -51,9 +50,7 @@ pub struct Block {
 
 impl Block {
     pub fn new() -> Block {
-        Block {
-            exprs: Vec::new(),
-        }
+        Block { exprs: Vec::new() }
     }
 }
 
@@ -64,9 +61,7 @@ pub struct Expr {
 
 impl Expr {
     pub fn new(kind: ExprKind) -> Expr {
-        Expr {
-            kind,
-        }
+        Expr { kind }
     }
 
     pub fn accept(&self, compiler: &mut Compiler) {
@@ -152,7 +147,7 @@ pub enum ExprKind {
     FunctionCall(String, Vec<Ptr<Expr>>),
 }
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Comparison {
     Equals,
     NotEquals,

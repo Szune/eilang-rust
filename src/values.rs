@@ -24,7 +24,7 @@ pub enum Value {
     Bool(bool),
 }
 
-const _VALUE : Value = Value::Unit;
+const _VALUE: Value = Value::Unit;
 
 impl Value {
     pub fn int(value: i64) -> Value {

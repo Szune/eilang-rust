@@ -15,12 +15,12 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use crate::ast::Ptr;
 use crate::function::{Function, Parameter};
+use crate::ops::OpCodes;
+use crate::types::TypeCollector;
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::ops::OpCodes;
-use crate::ast::Ptr;
-use crate::types::{TypeCollector};
 
 pub struct Env {
     pub types: TypeCollector,
@@ -33,15 +33,12 @@ impl Env {
         let unit = types.unit();
         let mut env = Env {
             types,
-            functions: HashMap::<String, Rc<Function>>::new()
+            functions: HashMap::<String, Rc<Function>>::new(),
         };
-        let mut println = Function::new("println".into(),
-                                        unit,
-                                        &Vec::<Ptr<Parameter>>::new());
+        let mut println = Function::new("println".into(), unit, &Vec::<Ptr<Parameter>>::new());
         println.code.push(OpCodes::Println);
         println.code.push(OpCodes::Return);
-        env.add_function("println".into(),
-                         println);
+        env.add_function("println".into(), println);
         return env;
     }
 
