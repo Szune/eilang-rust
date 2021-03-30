@@ -44,6 +44,12 @@ fn main() {
             println($"x + y = {x + y}");
         }
 
+        xyyy := false;
+        xyyy = true;
+        if xyyy {
+            println("helliioooo");
+        }
+
         add2(10,15);
         added := add(3,2);
         if add(2,3) == added {

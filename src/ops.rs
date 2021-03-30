@@ -29,6 +29,7 @@ pub enum OpCodes {
     Push(Rc<Value>),
     Reference(String),
     Return,
+    DefVar,
     SetVar,
     FunctionSetVar(String),
     // comparison stuff

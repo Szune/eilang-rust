@@ -87,7 +87,7 @@ impl Compiler {
             ExprKind::NewAssignment(ident, expr) => {
                 expr.ptr.accept_in_function(self, func);
                 func.code.push(OpCodes::Push(Rc::new(Value::String(ident.clone()))));
-                func.code.push(OpCodes::SetVar)
+                func.code.push(OpCodes::DefVar)
             }
             _ => unreachable!(),
         }
