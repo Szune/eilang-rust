@@ -38,6 +38,7 @@ use lexer::Lexer;
 use parser::Parser;
 
 fn main() {
+    // TODO: write more doctests
     // implement different types of chars for different encodings?
     // or just one 'char' that deals with everything as regular bytes?
     let lexer_for_parser = Lexer::new(String::from(
@@ -115,19 +116,11 @@ fn main() {
         world := "world!";
         println($"{hello} from {world}");
         "#,
-    )); // "fn add() -> int { return 5 + 10; }"
+    ));
     let (mut ast, mut types) = Parser::parse(lexer_for_parser);
     //println!("Parsed AST: {:#?}", ast);
-    /*
-    let result = TypeChecker::check(&ast);
-    if !result.success.get() {
-        println!("Type checker result: {}\n{}", result.success.get(), result.errors.borrow_mut().join("\n"));
-        return;
-    }
-    */
-    //println!("Compiling");
     //let (ast, success) = typechecker::check_types(ast, &mut types);
-    let typecheck = typechecker::check_types(&mut ast, &mut types);
+    let typecheck = typechecker::check_types(&mut ast, &mut types, &builtins::get_names());
     match typecheck {
         Ok(_) => {
             let mut env = env::Env::new(types);

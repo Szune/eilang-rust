@@ -17,6 +17,7 @@
  */
 use crate::ast::{BinaryOp, Block, Comparison, Expr, ExprKind, FunctionExpr, Ptr, Root};
 use crate::types::{Type, TypeCollector};
+use std::collections::HashSet;
 use std::ops::Deref;
 
 fn determine_types<'a>(
@@ -56,14 +57,29 @@ fn determine_types<'a>(
     (root, types)
 }
 
-pub fn check_types(root: &mut Root, types: &mut TypeCollector) -> Result<(), String> {
+/// Type checks most of the expressions in the code
+///
+/// Takes builtins so that eilang can be used as a library in the future, where you can write your own builtins
+///
+/// ```
+/// # let code = "fn test(s: int) -> int { return s; }";
+/// # let lexer = crate::lexer::Lexer::new(code.into());
+/// # let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
+/// let checked = check_types(&mut ast, &mut types, &crate::builtins::get_names());
+/// assert!(checked.is_ok());
+/// ```
+pub fn check_types(
+    root: &mut Root,
+    types: &mut TypeCollector,
+    builtins: &HashSet<String>,
+) -> Result<(), String> {
     let (root, types) = determine_types(root, types);
 
     // TODO: if there's an indeterminate type at this point, panic!
     for f in &root.functions {
         match &f.kind {
             ExprKind::Function(fun) => {
-                check_block(fun, &fun.code, root, types)?;
+                check_block(fun, &fun.code, root, types, builtins)?;
             }
             _ => unreachable!(),
         }
@@ -76,9 +92,10 @@ fn check_block(
     block: &Ptr<Block>,
     root: &Root,
     types: &TypeCollector,
+    builtins: &HashSet<String>,
 ) -> Result<(), String> {
     for (i, expr) in block.ptr.exprs.iter().enumerate() {
-        check_expr(func, expr, i, root, types)?
+        check_expr(func, expr, i, root, types, &builtins)?
     }
     Ok(())
 }
@@ -89,6 +106,7 @@ fn check_expr(
     expr_index: usize,
     root: &Root,
     types: &TypeCollector,
+    builtins: &HashSet<String>,
 ) -> Result<(), String> {
     match &expr.kind {
         ExprKind::Return(r) => {
@@ -110,11 +128,11 @@ fn check_expr(
         }
         ExprKind::Function(_) => Ok(()), // functions in functions are not implemented yet
         ExprKind::NewAssignment(_, v) => {
-            check_expr(func, v.ptr.deref(), expr_index, root, types)?;
+            check_expr(func, v.ptr.deref(), expr_index, root, types, builtins)?;
             Ok(())
         }
         ExprKind::Reassignment(ident, v) => {
-            check_expr(func, v.ptr.deref(), expr_index, root, types)?;
+            check_expr(func, v.ptr.deref(), expr_index, root, types, builtins)?;
             let re_typ = find_expr(func, v, expr_index, root, types)?;
             let typ = find_reference(func, ident, expr_index, root, types)?;
             if typ.id != re_typ.id {
@@ -126,7 +144,7 @@ fn check_expr(
             Ok(())
         }
         ExprKind::If(_if, v, e) => {
-            check_expr(func, _if.ptr.deref(), expr_index, root, types)?;
+            check_expr(func, _if.ptr.deref(), expr_index, root, types, builtins)?;
             let if_type = find_expr(func, _if, expr_index, root, types)?;
             if if_type.id != types.boolean().id {
                 return Err(format!(
@@ -135,9 +153,9 @@ fn check_expr(
                 ));
             }
 
-            check_block(func, v, root, types)?;
+            check_block(func, v, root, types, builtins)?;
             if let Some(e) = e {
-                check_block(func, e, root, types)?;
+                check_block(func, e, root, types, builtins)?;
             }
             Ok(())
         }
@@ -148,8 +166,8 @@ fn check_expr(
         ExprKind::StackPop => Ok(()),
         ExprKind::Reference(_) => Ok(()),
         ExprKind::Comparison(l, r, op) => {
-            check_expr(func, l.ptr.deref(), expr_index, root, types)?;
-            check_expr(func, r.ptr.deref(), expr_index, root, types)?;
+            check_expr(func, l.ptr.deref(), expr_index, root, types, builtins)?;
+            check_expr(func, r.ptr.deref(), expr_index, root, types, builtins)?;
             let l = find_expr(func, &l, expr_index, root, types)?;
             let r = find_expr(func, &r, expr_index, root, types)?;
             if !are_comparable(&l, &r, op, types) {
@@ -161,18 +179,18 @@ fn check_expr(
             Ok(())
         }
         ExprKind::BinaryOp(l, r, op) => {
-            check_expr(func, l.ptr.deref(), expr_index, root, types)?;
-            check_expr(func, r.ptr.deref(), expr_index, root, types)?;
+            check_expr(func, l.ptr.deref(), expr_index, root, types, builtins)?;
+            check_expr(func, r.ptr.deref(), expr_index, root, types, builtins)?;
             let l = find_expr(func, &l, expr_index, root, types)?;
             let r = find_expr(func, &r, expr_index, root, types)?;
             let _ = binary_op_result_type_of(l, r, op, types)?;
             Ok(())
         }
         ExprKind::FunctionCall(n, args) => {
-            if n == "println" {
-                // special case, just check any expressions being printed :(
+            if builtins.contains(n) {
+                // can't access the code, just check the expressions in the arguments
                 for arg in args.iter() {
-                    check_expr(func, arg.ptr.deref(), expr_index, root, types)?;
+                    check_expr(func, arg.ptr.deref(), expr_index, root, types, builtins)?;
                 }
                 Ok(())
             } else {
@@ -314,6 +332,7 @@ fn binary_op_result_type_of(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::builtins;
     use crate::types::TypeScope;
 
     #[test]
@@ -329,7 +348,7 @@ mod tests {
         types
             .try_define_type("cool_type", TypeScope::Global)
             .unwrap();
-        assert!(check_types(&mut ast, &mut types).is_ok());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_ok());
     }
 
     #[test]
@@ -346,7 +365,7 @@ mod tests {
         types
             .try_define_type("cool_type", TypeScope::Global)
             .unwrap();
-        assert!(check_types(&mut ast, &mut types).is_err());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_err());
     }
 
     #[test]
@@ -359,7 +378,7 @@ mod tests {
         hello := test(2,"hi");"#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_ok());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_ok());
     }
 
     #[test]
@@ -372,7 +391,7 @@ mod tests {
         hello := test(2,3);"#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_err());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_err());
     }
 
     #[test]
@@ -382,7 +401,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_ok());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_ok());
     }
 
     #[test]
@@ -392,7 +411,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_err());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_err());
     }
 
     #[test]
@@ -403,7 +422,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_ok());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_ok());
     }
 
     #[test]
@@ -414,7 +433,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_ok());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_ok());
     }
 
     #[test]
@@ -425,7 +444,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_err());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_err());
     }
 
     #[test]
@@ -439,7 +458,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_ok());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_ok());
     }
 
     #[test]
@@ -453,7 +472,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_err());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_err());
     }
 
     #[test]
@@ -467,7 +486,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_ok());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_ok());
     }
 
     #[test]
@@ -479,7 +498,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_err());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_err());
     }
 
     #[test]
@@ -491,7 +510,7 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_ok());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_ok());
     }
 
     #[test]
@@ -503,6 +522,6 @@ mod tests {
         "#;
         let lexer = crate::lexer::Lexer::new(code.into());
         let (mut ast, mut types) = crate::parser::Parser::parse(lexer);
-        assert!(check_types(&mut ast, &mut types).is_err());
+        assert!(check_types(&mut ast, &mut types, &builtins::get_names()).is_err());
     }
 }

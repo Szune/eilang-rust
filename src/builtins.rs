@@ -19,6 +19,7 @@ use crate::env::Env;
 use crate::rustfn::RustFunction;
 use crate::values::Value;
 use std::borrow::Borrow;
+use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -38,7 +39,7 @@ fn get_printable_value(value: Rc<Value>) -> String {
 
 fn add_println(env: &mut Env) {
     env.add_rust_function(
-        "println".into(),
+        PRINTLN.into(),
         RustFunction::new(&|stack| {
             let arg_count = stack.pop().unwrap();
             let arg_count = match arg_count.deref() {
@@ -69,6 +70,15 @@ fn add_println(env: &mut Env) {
     );
 }
 
+/// Adds builtins to the environment
 pub fn add(env: &mut Env) {
     add_println(env);
+}
+
+const PRINTLN: &'static str = "println";
+
+pub fn get_names() -> HashSet<String> {
+    let mut set = HashSet::new();
+    set.insert(PRINTLN.into());
+    set
 }
