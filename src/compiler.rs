@@ -47,7 +47,7 @@ impl Compiler {
         //println!("Compiling AST {:?}", ast);
         let mut compiler = Compiler { env };
         compiler.compile_root(ast.functions);
-        return compiler.env;
+        compiler.env
         // TODO: consider optimizing away unnecessary nodes
     }
 
@@ -147,24 +147,24 @@ impl Compiler {
 
     pub fn visit_function(&mut self, func: &ExprKind) {
         match func {
-            ExprKind::Function(newf) => {
+            ExprKind::Function(new_func) => {
                 let mut f = Function::new(
-                    newf.name.clone(),
-                    newf.return_type.clone(),
-                    &newf.parameters,
+                    new_func.name.clone(),
+                    new_func.return_type.clone(),
+                    &new_func.parameters,
                 );
                 //println!("Compiling function {}({:?}) -> {}", f.name, f.arguments, f.return_type);
                 for p in &f.parameters {
                     f.code.push(OpCodes::FunctionSetVar(p.name.clone()));
                 }
-                let b = &newf.code.ptr;
+                let b = &new_func.code.ptr;
                 for e in &b.exprs {
                     e.accept_in_function(self, &mut f);
                     //println!("{:?}", e);
                 }
 
                 // if it's a function returning unit, write an implicit return
-                if newf.return_type.id == self.env.types.unit().id {
+                if new_func.return_type.id == self.env.types.unit().id {
                     f.code.push(OpCodes::Push(Rc::new(Value::unit())));
                     f.code.push(OpCodes::Return);
                 }
@@ -207,6 +207,12 @@ impl Compiler {
                     }
                     BinaryOp::Subtraction => {
                         func.code.push(OpCodes::Subtract);
+                    }
+                    BinaryOp::Multiplication => {
+                        func.code.push(OpCodes::Multiply);
+                    }
+                    BinaryOp::Division => {
+                        func.code.push(OpCodes::Divide);
                     }
                 }
             }

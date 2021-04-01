@@ -45,12 +45,10 @@ fn optimize_root_expr(block: &mut Ptr<Block>) {
             _ => (),
         }
     }
-    let mut offset = 0;
-    for off in offsets {
+    for (offset, insert_idx) in offsets.into_iter().enumerate() {
         block
             .ptr
             .exprs
-            .insert(off + offset + 1, Expr::new(ExprKind::StackPop)); // clean up stack (might not always be beneficial tbh)
-        offset += 1;
+            .insert(insert_idx + offset + 1, Expr::new(ExprKind::StackPop)); // clean up stack (might not always be beneficial tbh)
     }
 }

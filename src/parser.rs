@@ -40,7 +40,7 @@ impl Parser {
         parser.consume();
         parser.consume();
         parser.parse_private();
-        return (parser.root, parser.types);
+        (parser.root, parser.types)
     }
 
     fn parse_private(&mut self) {
@@ -74,7 +74,7 @@ impl Parser {
                 .functions
                 .push(Expr::new(ExprKind::Function(FunctionExpr {
                     name: "main".into(),
-                    return_type: self.types.any().clone(),
+                    return_type: self.types.any(),
                     parameters: Vec::new(),
                     code: Ptr(global_block),
                 })));
@@ -132,7 +132,7 @@ impl Parser {
             block.exprs.push(expr);
         }
         self.require(TokenType::RightBrace);
-        return Ptr(block);
+        Ptr(block)
     }
 
     /// e.g. if, return, etc
@@ -146,7 +146,7 @@ impl Parser {
                 }
                 let expr = self.parse_or();
                 self.require(TokenType::Semicolon);
-                return Expr::new(ExprKind::Return(Some(Ptr(expr))));
+                Expr::new(ExprKind::Return(Some(Ptr(expr))))
             }
             TokenType::If => {
                 self.consume();
@@ -160,17 +160,14 @@ impl Parser {
                     _ => None,
                 };
 
-                return Expr::new(ExprKind::If(Ptr(if_expr), true_block, else_block));
+                Expr::new(ExprKind::If(Ptr(if_expr), true_block, else_block))
             }
             TokenType::Identifier(_) => {
                 let expr = self.parse_outermost_expr();
                 self.require(TokenType::Semicolon);
                 expr
             }
-            _ => {
-                let expr = self.parse_outermost_expr();
-                expr
-            }
+            _ => self.parse_outermost_expr(),
         }
     }
 
@@ -316,14 +313,27 @@ impl Parser {
     }
 
     fn parse_binary_ops_2(&mut self) -> Expr {
-        let expr = self.parse_innermost_expr();
+        let mut expr = self.parse_innermost_expr();
         while matches!(self.buffer[0].typ, TokenType::Asterisk | TokenType::Slash) {
-            /*println!(
-                "endless looping on token in bin op 2 {:?}",
-                self.buffer[0].typ
-            );*/
+            if self.is_token(TokenType::Asterisk) {
+                self.consume();
+                let right = self.parse_binary_ops_2();
+                expr = Expr::new(ExprKind::BinaryOp(
+                    Ptr(expr),
+                    Ptr(right),
+                    BinaryOp::Multiplication,
+                ));
+            } else if self.is_token(TokenType::Slash) {
+                self.consume();
+                let right = self.parse_binary_ops_2();
+                expr = Expr::new(ExprKind::BinaryOp(
+                    Ptr(expr),
+                    Ptr(right),
+                    BinaryOp::Division,
+                ));
+            }
         }
-        return expr;
+        expr
     }
 
     /// e.g. references, constants, etc
@@ -390,7 +400,7 @@ impl Parser {
             }
         }
         self.require(TokenType::RightParenthesis);
-        return arguments;
+        arguments
     }
 
     fn parse_full_identifier(&mut self) -> String {
@@ -423,11 +433,11 @@ impl Parser {
             }
         }
         self.require(TokenType::RightParenthesis);
-        return params;
+        params
     }
 
-    fn is_token(&mut self, token: TokenType) -> bool {
-        return self.buffer[0].typ == token;
+    fn is_token(&self, token: TokenType) -> bool {
+        self.buffer[0].typ == token
     }
 
     fn consume(&mut self) {
@@ -439,7 +449,7 @@ impl Parser {
         let consumed = self.buffer[0].clone();
         self.buffer.swap(0, 1);
         self.buffer[1] = self.lexer.next_token();
-        return consumed;
+        consumed
     }
 
     fn require(&mut self, token: TokenType) {
@@ -466,16 +476,12 @@ mod tests {
                 ExprKind::Function(f) => f,
                 _ => unreachable!(),
             })
-            .filter(|f| f.name == "main")
-            .next()
+            .find(|f| f.name == "main")
             .unwrap();
 
         match main.code.ptr.exprs.first().unwrap().kind {
             ExprKind::StringConstant(_) => {} // as expected
-            _ => assert!(
-                false,
-                "String constant did not parse into a string constant expression AST node"
-            ),
+            _ => panic!("String constant did not parse into a string constant expression AST node"),
         }
     }
 }

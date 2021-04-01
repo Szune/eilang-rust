@@ -23,6 +23,8 @@ pub enum OpCodes {
     CallRustFn,
     Add,
     Subtract,
+    Multiply,
+    Divide,
     Call,
     Jump(usize),
     BranchIfFalse(usize),

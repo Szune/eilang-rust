@@ -292,13 +292,10 @@ fn find_reference(
 
     for e in func.code.ptr.exprs.iter().take(ref_index).rev() {
         // rev to get the closest one in case of shadowing
-        match &e.kind {
-            ExprKind::NewAssignment(n, v) => {
-                if n == ident {
-                    return find_expr(func, v, ref_index, root, types);
-                }
+        if let ExprKind::NewAssignment(n, v) = &e.kind {
+            if n == ident {
+                return find_expr(func, v, ref_index, root, types);
             }
-            _ => (),
         }
     }
 

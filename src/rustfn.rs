@@ -48,8 +48,7 @@ mod tests {
             },
         };
 
-        let mut stack: Vec<Rc<Value>> = Vec::new();
-        stack.push(Rc::new(Value::int(1)));
+        let mut stack: Vec<Rc<Value>> = vec![Rc::new(Value::int(1))];
         testfn.call(&mut stack);
         stack.pop();
         stack.push(Rc::new(Value::string("hello test".into())));

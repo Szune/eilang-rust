@@ -75,7 +75,7 @@ pub fn add(env: &mut Env) {
     add_println(env);
 }
 
-const PRINTLN: &'static str = "println";
+const PRINTLN: &str = "println";
 
 pub fn get_names() -> HashSet<String> {
     let mut set = HashSet::new();

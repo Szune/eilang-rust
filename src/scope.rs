@@ -33,6 +33,12 @@ pub enum ScopeType {
     Function,
 }
 
+impl Default for Scope {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Scope {
     pub fn new() -> Self {
         Self {
@@ -51,7 +57,7 @@ impl Scope {
     }
 
     pub fn get_type(&self) -> ScopeType {
-        return self.typ.clone();
+        self.typ.clone()
     }
 
     /// Define variable in current scope
@@ -64,14 +70,14 @@ impl Scope {
 
     pub fn get_parent(self) -> Option<Scope> {
         Rc::try_unwrap(self.parent)
-            .unwrap_or(RefCell::new(None))
+            .unwrap_or_else(|_| RefCell::new(None))
             .into_inner()
     }
 
     /// Set value of variable in its containing scope
     pub fn set_variable(&mut self, var: String, val: Rc<Value>) {
         if self.has_variable(&var) {
-            self.vars.insert(var.clone(), val);
+            self.vars.insert(var, val);
         } else {
             loop {
                 let current = Rc::clone(&self.parent);
@@ -79,7 +85,7 @@ impl Scope {
                 let borrowed = &mut *current.borrow_mut();
                 if let Some(ref mut borrowed) = borrowed {
                     if borrowed.has_variable(&var) {
-                        borrowed.vars.insert(var.clone(), val);
+                        borrowed.vars.insert(var, val);
                         break;
                     }
                 } else {
@@ -90,7 +96,7 @@ impl Scope {
     }
 
     pub fn has_variable(&self, var: &str) -> bool {
-        return self.vars.contains_key(var);
+        self.vars.contains_key(var)
     }
 
     pub fn get_variable(&self, var: &str) -> Rc<Value> {
@@ -131,13 +137,13 @@ mod tests {
     #[test]
     pub fn scope_get_local_var_that_also_exists_in_parent() {
         let mut parent_scope = Scope::new();
-        parent_scope.define_variable("somevar".into(), Rc::new(Value::bool(false)));
+        parent_scope.define_variable("some_var".into(), Rc::new(Value::bool(false)));
         let mut child_scope = Scope::with_parent(parent_scope);
-        child_scope.define_variable("somevar".into(), Rc::new(Value::bool(true)));
+        child_scope.define_variable("some_var".into(), Rc::new(Value::bool(true)));
 
-        let somevar = child_scope.get_variable("somevar");
+        let some_var = child_scope.get_variable("some_var");
 
-        match *somevar {
+        match *some_var {
             Value::Bool(b) => assert!(b),
             _ => unreachable!(),
         }
@@ -146,13 +152,13 @@ mod tests {
     #[test]
     pub fn scope_get_local_var_that_only_exists_in_child() {
         let mut parent_scope = Scope::new();
-        parent_scope.define_variable("somevar2".into(), Rc::new(Value::bool(false)));
+        parent_scope.define_variable("some_var2".into(), Rc::new(Value::bool(false)));
         let mut child_scope = Scope::with_parent(parent_scope);
-        child_scope.define_variable("somevar1".into(), Rc::new(Value::bool(true)));
+        child_scope.define_variable("some_var1".into(), Rc::new(Value::bool(true)));
 
-        let somevar = child_scope.get_variable("somevar1");
+        let some_var = child_scope.get_variable("some_var1");
 
-        match *somevar {
+        match *some_var {
             Value::Bool(b) => assert!(b),
             _ => unreachable!(),
         }
@@ -162,10 +168,10 @@ mod tests {
     #[should_panic]
     pub fn scope_try_get_var_that_is_not_defined() {
         let mut parent_scope = Scope::new();
-        parent_scope.define_variable("somevar".into(), Rc::new(Value::bool(false)));
+        parent_scope.define_variable("some_var".into(), Rc::new(Value::bool(false)));
         let mut child_scope = Scope::with_parent(parent_scope);
-        child_scope.define_variable("somevar".into(), Rc::new(Value::bool(true)));
+        child_scope.define_variable("some_var".into(), Rc::new(Value::bool(true)));
 
-        let _ = child_scope.get_variable("notdefined");
+        let _ = child_scope.get_variable("not_defined");
     }
 }

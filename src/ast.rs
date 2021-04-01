@@ -43,6 +43,12 @@ impl Root {
     }
 }
 
+impl Default for Root {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub struct Block {
     pub exprs: Vec<Expr>,
@@ -51,6 +57,12 @@ pub struct Block {
 impl Block {
     pub fn new() -> Block {
         Block { exprs: Vec::new() }
+    }
+}
+
+impl Default for Block {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -169,4 +181,6 @@ pub enum Comparison {
 pub enum BinaryOp {
     Addition,
     Subtraction,
+    Multiplication,
+    Division,
 }

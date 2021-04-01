@@ -35,46 +35,32 @@ pub struct Interpreter {}
 
 impl Interpreter {
     pub fn interpret(env: Env) -> Rc<Value> {
-        let main = env
-            .get_function("main".into())
-            .expect("Missing a main function");
+        let main = env.get_function("main").expect("Missing a main function");
         let mut stack = Vec::<Rc<Value>>::new();
         let mut scope = Scope::new();
-        let mut frames = Vec::<CallFrame>::new();
-        frames.push(CallFrame {
+        let mut frames = vec![CallFrame {
             addr: Cell::new(0usize),
             func: Rc::clone(&main),
             called_with_arg_count: 0,
-        });
+        }];
 
         let mut skip_inc = false;
 
         while !frames.is_empty() {
             let frame = &mut frames.last().unwrap();
-            let op = frame.func.code.get(frame.addr.get()).expect(
-                format!(
+            let op = frame.func.code.get(frame.addr.get()).unwrap_or_else(|| {
+                panic!(
                     "Addr {} out of bounds, total opcodes {}",
                     frame.addr.get(),
                     frame.func.code.len()
                 )
-                .as_str(),
-            );
+            });
             //println!("on addr {}", frame.addr.get());
             match op {
-                OpCodes::Add => Interpreter::op_code_add(&mut stack),
-                OpCodes::Subtract => {
-                    let right = stack.pop();
-                    let left = stack.pop();
-                    match left.unwrap().deref() {
-                        Value::Integer(l) => match right.unwrap().deref() {
-                            Value::Integer(r) => {
-                                stack.push(Rc::new(Value::int(l - r)));
-                            }
-                            _ => unimplemented!(),
-                        },
-                        _ => unimplemented!(),
-                    }
-                }
+                OpCodes::Add => Interpreter::op_add(&mut stack),
+                OpCodes::Subtract => Interpreter::op_sub(&mut stack),
+                OpCodes::Multiply => Interpreter::op_mul(&mut stack),
+                OpCodes::Divide => Interpreter::op_div(&mut stack),
                 OpCodes::Call => {
                     let name = stack.pop().unwrap();
                     let arg_count = stack.pop().unwrap();
@@ -90,7 +76,7 @@ impl Interpreter {
                         addr: Cell::new(0usize),
                         func: env
                             .get_function(&name)
-                            .expect(format!("Function {} not found", name).as_str()),
+                            .unwrap_or_else(|| panic!("Function {} not found", name)),
                         called_with_arg_count: arg_count,
                     };
 
@@ -150,9 +136,9 @@ impl Interpreter {
                     skip_inc = true;
                 }
                 OpCodes::BranchIfFalse(addr) => {
-                    let brval = stack.pop().unwrap();
-                    let brval = brval.deref();
-                    if matches!(brval, Value::Bool(false)) {
+                    let br_val = stack.pop().unwrap();
+                    let br_val = br_val.deref();
+                    if matches!(br_val, Value::Bool(false)) {
                         frame.addr.set(*addr);
                         skip_inc = true;
                     }
@@ -340,7 +326,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn op_code_add(stack: &mut Vec<Rc<Value>>) {
+    fn op_add(stack: &mut Vec<Rc<Value>>) {
         let right = stack.pop().unwrap();
         let right = right.deref();
         let left = stack.pop().unwrap();
@@ -361,6 +347,51 @@ impl Interpreter {
                 }
                 Value::Unit => {
                     stack.push(Rc::new(Value::string(l.clone() + "()")));
+                }
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        }
+    }
+
+    #[inline]
+    fn op_sub(stack: &mut Vec<Rc<Value>>) {
+        let right = stack.pop();
+        let left = stack.pop();
+        match left.unwrap().deref() {
+            Value::Integer(l) => match right.unwrap().deref() {
+                Value::Integer(r) => {
+                    stack.push(Rc::new(Value::int(l - r)));
+                }
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        }
+    }
+
+    #[inline]
+    fn op_mul(stack: &mut Vec<Rc<Value>>) {
+        let right = stack.pop();
+        let left = stack.pop();
+        match left.unwrap().deref() {
+            Value::Integer(l) => match right.unwrap().deref() {
+                Value::Integer(r) => {
+                    stack.push(Rc::new(Value::int(l * r)));
+                }
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        }
+    }
+
+    #[inline]
+    fn op_div(stack: &mut Vec<Rc<Value>>) {
+        let right = stack.pop();
+        let left = stack.pop();
+        match left.unwrap().deref() {
+            Value::Integer(l) => match right.unwrap().deref() {
+                Value::Integer(r) => {
+                    stack.push(Rc::new(Value::int(l / r)));
                 }
                 _ => unimplemented!(),
             },

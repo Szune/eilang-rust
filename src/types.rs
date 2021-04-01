@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use std::collections::HashMap;
+use std::fmt;
 
 type Id = u64;
 
@@ -45,7 +46,7 @@ impl Type {
 
     #[inline(always)]
     pub fn is_indeterminate(&self) -> bool {
-        return self.id == INDETERMINATE;
+        self.id == INDETERMINATE
     }
 }
 
@@ -61,7 +62,7 @@ pub enum ActualType {
 }
  */
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct TypeDef {
     pub name: String,
     pub scope: TypeScope,
@@ -97,6 +98,19 @@ pub enum TypeVariant {
     Actual(ActualType)
 }
  */
+
+#[derive(Debug)]
+pub struct TypeAlreadyDefined(TypeDef);
+
+impl fmt::Display for TypeAlreadyDefined {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Type {} already defined in {:?}",
+            self.0.name, self.0.scope
+        )
+    }
+}
 
 impl TypeCollector {
     // might remove Void later, feels a bit redundant to have both void and unit
@@ -140,31 +154,31 @@ impl TypeCollector {
     }
 
     pub fn void(&self) -> Type {
-        self.get_type(Self::VOID, &TypeScope::Global).clone()
+        self.get_type(Self::VOID, &TypeScope::Global)
     }
 
     pub fn any(&self) -> Type {
-        self.get_type(Self::ANY, &TypeScope::Global).clone()
+        self.get_type(Self::ANY, &TypeScope::Global)
     }
 
     pub fn string(&self) -> Type {
-        self.get_type(Self::STRING, &TypeScope::Global).clone()
+        self.get_type(Self::STRING, &TypeScope::Global)
     }
 
     pub fn int64(&self) -> Type {
-        self.get_type(Self::INT64, &TypeScope::Global).clone()
+        self.get_type(Self::INT64, &TypeScope::Global)
     }
 
     pub fn double(&self) -> Type {
-        self.get_type(Self::DOUBLE, &TypeScope::Global).clone()
+        self.get_type(Self::DOUBLE, &TypeScope::Global)
     }
 
     pub fn boolean(&self) -> Type {
-        self.get_type(Self::BOOLEAN, &TypeScope::Global).clone()
+        self.get_type(Self::BOOLEAN, &TypeScope::Global)
     }
 
     pub fn unit(&self) -> Type {
-        self.get_type(Self::UNIT, &TypeScope::Global).clone()
+        self.get_type(Self::UNIT, &TypeScope::Global)
     }
 
     fn new_indeterminate_type(name: &str, scope: TypeScope) -> Type {
@@ -175,13 +189,18 @@ impl TypeCollector {
         }
     }
 
-    pub fn try_define_type(&mut self, name: &str, scope: TypeScope) -> Result<(), ()> {
+    pub fn try_define_type(
+        &mut self,
+        name: &str,
+        scope: TypeScope,
+    ) -> Result<(), TypeAlreadyDefined> {
         let type_def = TypeDef {
             name: name.into(),
             scope: scope.clone(),
         };
+
         if self.items.contains_key(&type_def) {
-            Err(())
+            Err(TypeAlreadyDefined(type_def))
         } else {
             let id = self.id_counter + 1;
             self.id_counter = id;
@@ -208,8 +227,8 @@ impl TypeCollector {
                         scope: scope.clone(),
                     }
                 })
-                .map(|t| t.clone())
-                .unwrap_or(Self::new_indeterminate_type(name, scope.clone())),
+                .cloned()
+                .unwrap_or_else(|| Self::new_indeterminate_type(name, scope.clone())),
             TypeScope::Module(_) => self
                 .items
                 .get(&{
@@ -223,7 +242,13 @@ impl TypeCollector {
     }
 
     pub fn try_get_type_by_id(&self, id: Id) -> Option<Type> {
-        self.items_id.get(&id).map(|t| t.clone())
+        self.items_id.get(&id).cloned()
+    }
+}
+
+impl Default for TypeCollector {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -263,8 +288,17 @@ mod tests {
     #[test]
     pub fn get_indeterminate() {
         let types = TypeCollector::new();
-        let t = types.get_type("doesnotexist", &TypeScope::Module("Hello".into()));
-        assert_eq!(t.name, "doesnotexist");
+        let t = types.get_type("does_not_exist", &TypeScope::Module("Hello".into()));
+        assert_eq!(t.name, "does_not_exist");
         assert_eq!(t.id, INDETERMINATE);
+    }
+
+    #[test]
+    pub fn define_same_type_in_same_scope_twice() {
+        let mut types = TypeCollector::new();
+        let result = types.try_define_type("test1", TypeScope::Global);
+        assert!(result.is_ok());
+        let result = types.try_define_type("test1", TypeScope::Global);
+        assert!(result.is_err());
     }
 }

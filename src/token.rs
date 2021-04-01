@@ -43,7 +43,7 @@ impl Token {
     }
 
     pub fn empty() -> Token {
-        return _EMPTY;
+        _EMPTY
     }
 
     pub fn ident(value: String) -> Token {

@@ -35,7 +35,7 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(name: String, return_type: Type, arguments: &Vec<Ptr<Parameter>>) -> Function {
+    pub fn new(name: String, return_type: Type, arguments: &[Ptr<Parameter>]) -> Function {
         Function {
             name,
             return_type,

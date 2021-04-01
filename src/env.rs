@@ -30,12 +30,11 @@ pub struct Env {
 
 impl Env {
     pub fn new(types: TypeCollector) -> Env {
-        let env = Env {
+        Env {
             types,
             functions: HashMap::new(),
             rust_functions: HashMap::new(),
-        };
-        return env;
+        }
     }
 
     pub fn add_function(&mut self, name: String, function: Function) {
@@ -53,7 +52,7 @@ impl Env {
     pub fn call_rust_function(&self, name: &str, stack: &mut Vec<Rc<Value>>) {
         self.rust_functions
             .get(name)
-            .expect(&format!("Could not find rust function {}", name))
+            .unwrap_or_else(|| panic!("Could not find rust function {}", name))
             .call(stack);
     }
 
