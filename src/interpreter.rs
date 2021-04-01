@@ -18,86 +18,16 @@
 use crate::env::Env;
 use crate::function::Function;
 use crate::ops::OpCodes;
+use crate::scope::Scope;
 use crate::values::Value;
-use std::borrow::Borrow;
-use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::cell::Cell;
 use std::ops::Deref;
 use std::rc::Rc;
-
-pub struct Scope {
-    vars: HashMap<String, Rc<Value>>,
-    parent: Rc<RefCell<Option<Scope>>>,
-}
-
-impl Scope {
-    pub fn new() -> Self {
-        Self {
-            vars: HashMap::new(),
-            parent: Rc::new(RefCell::new(None)),
-        }
-    }
-
-    pub fn with_parent(parent: Self) -> Self {
-        Self {
-            vars: HashMap::new(),
-            parent: Rc::new(RefCell::new(Some(parent))),
-        }
-    }
-
-    /// Define variable in current scope
-    pub fn define_variable(&mut self, var: String, val: Rc<Value>) {
-        self.vars
-            .entry(var)
-            .and_modify(|e| *e = Rc::clone(&val))
-            .or_insert_with(|| Rc::clone(&val));
-    }
-
-    /// Set value of variable in its containing scope
-    pub fn set_variable(&mut self, var: String, val: Rc<Value>) {
-        if self.has_variable(&var) {
-            self.vars.insert(var.clone(), val);
-        } else {
-            loop {
-                let current = Rc::clone(&self.parent);
-
-                let borrowed = &mut *current.borrow_mut();
-                if let Some(ref mut borrowed) = borrowed {
-                    if borrowed.has_variable(&var) {
-                        borrowed.vars.insert(var.clone(), val);
-                        break;
-                    }
-                } else {
-                    panic!("Variable {} has not been defined yet.", &var);
-                }
-            }
-        }
-    }
-
-    pub fn has_variable(&self, var: &str) -> bool {
-        return self.vars.contains_key(var);
-    }
-
-    pub fn get_variable(&self, var: &str) -> Rc<Value> {
-        let variable = self.vars.get(var);
-        if let Some(variable) = variable {
-            return Rc::clone(variable);
-        }
-
-        // bit of a mess
-        let parent = Rc::clone(&self.parent);
-        let borrowed: &RefCell<Option<Scope>> = parent.borrow();
-        let live = match *borrowed.borrow() {
-            Some(ref s) => s.get_variable(var),
-            None => panic!("Variable {} has not been defined yet.", &var),
-        };
-        live
-    }
-}
 
 pub struct CallFrame {
     addr: Cell<usize>,
     func: Rc<Function>,
+    // might not need `called_with_arg_count`
     called_with_arg_count: i64,
 }
 
@@ -112,12 +42,11 @@ impl Interpreter {
         let scopes = &mut Vec::<Scope>::new();
         scopes.push(Scope::new());
         let mut frames = Vec::<CallFrame>::new();
-        let fra = CallFrame {
+        frames.push(CallFrame {
             addr: Cell::new(0usize),
             func: Rc::clone(&main),
             called_with_arg_count: 0,
-        };
-        frames.push(fra);
+        });
 
         let mut skip_inc = false;
 
@@ -148,27 +77,47 @@ impl Interpreter {
                     }
                 }
                 OpCodes::Call => {
-                    let name = stack.pop();
-                    let arg_count = match stack.pop().unwrap().deref() {
-                        Value::Integer(num) => *num,
-                        _ => panic!("noo"),
-                    };
-                    let name = match name.unwrap().deref() {
+                    let name = stack.pop().unwrap();
+                    let arg_count = stack.pop().unwrap();
+                    let name = match name.deref() {
                         Value::String(s) => s.clone(),
-                        _ => panic!("noo"),
+                        _ => panic!("Type error: expected string as function name in OpCodes::Call, found {:?}", name),
+                    };
+                    let arg_count = match arg_count.deref() {
+                        Value::Integer(num) => *num,
+                        v => panic!("Type error: expected integer as argument count in call to function {:?}, found {:?}", name, v),
                     };
                     let fr = CallFrame {
                         addr: Cell::new(0usize),
                         func: env
-                            .get_function(name.clone())
-                            .expect(format!("Function {} not found", name.clone()).as_str()),
+                            .get_function(&name)
+                            .expect(format!("Function {} not found", name).as_str()),
                         called_with_arg_count: arg_count,
                     };
+
+                    // TODO: add current scope as parent
+                    //  do I ever need access to multiple scopes from this function?
+                    //  or could I just use a let mut scope = Scope::new();
+                    //  and then do scope = Scope::with_parent(scope); <- that's not going to work, but you get the idea
+                    //  we'll see!
+                    //  Rc might be helpful
+                    //let parent = scopes.last().unwrap();
+                    //scopes.push(Scope::with_parent(parent));
+
                     scopes.push(Scope::new());
                     frames.push(fr);
                     skip_inc = true;
                     //println!("function call in interpreter: {:?}", n);
                     //println!("function call in interpreter: {:?} {:?}", n, args);
+                }
+                OpCodes::CallRustFn => {
+                    let name = stack.pop().unwrap();
+                    let name = match name.deref() {
+                        Value::String(s) => s.clone(),
+                        _ => panic!("Type error: expected string as function name in OpCodes::Call, found {:?}", name),
+                    };
+
+                    env.call_rust_function(&name, &mut stack);
                 }
                 OpCodes::Push(value) => {
                     stack.push(Rc::clone(&value));
@@ -202,18 +151,6 @@ impl Interpreter {
                     };
                     let s = scopes.last_mut().unwrap();
                     s.set_variable(ident.clone(), value);
-                }
-                OpCodes::Println => {
-                    // argument count is popped in OperationCodes::Call, may need it later here though
-                    if frame.called_with_arg_count < 1 {
-                        println!();
-                    } else {
-                        // TODO: use called_with_arg_count and merge them to one print statement
-                        // TODO: format the printed value depending on the value's type
-                        let value = stack.pop().unwrap();
-                        let print_value = get_printable_value(value);
-                        println!("{}", print_value);
-                    }
                 }
                 OpCodes::FunctionSetVar(n) => {
                     let value = stack.pop();
@@ -256,6 +193,9 @@ impl Interpreter {
                 OpCodes::Or => {
                     Interpreter::op_or(&mut stack);
                 }
+                OpCodes::Pop => {
+                    stack.pop();
+                }
             }
             if frames.is_empty() {
                 break;
@@ -290,7 +230,7 @@ impl Interpreter {
             _ => unimplemented!(),
         };
 
-        stack.push(Rc::new(Value::Bool(result)));
+        stack.push(Rc::new(Value::bool(result)));
     }
 
     #[inline]
@@ -308,7 +248,7 @@ impl Interpreter {
             _ => unimplemented!(),
         };
 
-        stack.push(Rc::new(Value::Bool(result)));
+        stack.push(Rc::new(Value::bool(result)));
     }
 
     #[inline]
@@ -326,7 +266,7 @@ impl Interpreter {
             _ => unimplemented!(),
         };
 
-        stack.push(Rc::new(Value::Bool(result)));
+        stack.push(Rc::new(Value::bool(result)));
     }
 
     #[inline]
@@ -344,7 +284,7 @@ impl Interpreter {
             _ => unimplemented!(),
         };
 
-        stack.push(Rc::new(Value::Bool(result)));
+        stack.push(Rc::new(Value::bool(result)));
     }
 
     #[inline]
@@ -362,7 +302,7 @@ impl Interpreter {
             _ => unimplemented!(),
         };
 
-        stack.push(Rc::new(Value::Bool(result)));
+        stack.push(Rc::new(Value::bool(result)));
     }
 
     #[inline]
@@ -380,7 +320,7 @@ impl Interpreter {
             _ => unimplemented!(),
         };
 
-        stack.push(Rc::new(Value::Bool(result)));
+        stack.push(Rc::new(Value::bool(result)));
     }
 
     #[inline]
@@ -406,7 +346,7 @@ impl Interpreter {
             _ => unimplemented!(),
         };
 
-        stack.push(Rc::new(Value::Bool(if not { !result } else { result })))
+        stack.push(Rc::new(Value::bool(if not { !result } else { result })))
     }
 
     #[inline]
@@ -427,29 +367,15 @@ impl Interpreter {
                     stack.push(Rc::new(Value::string(l.clone() + &r.clone())));
                 }
                 Value::Integer(r) => {
-                    // this can't be the right way to do it...
-                    stack.push(Rc::new(Value::string(
-                        l.clone() + format!("{}", &r.clone()).as_str(),
-                    )));
+                    stack.push(Rc::new(Value::string(l.clone() + &r.to_string())));
+                }
+                Value::Unit => {
+                    stack.push(Rc::new(Value::string(l.clone() + "()")));
                 }
                 _ => unimplemented!(),
             },
             _ => unimplemented!(),
         }
-    }
-}
-
-fn get_printable_value(value: Rc<Value>) -> String {
-    match value.borrow() {
-        Value::Unit => "{}".into(),
-        Value::Integer(i) => {
-            format!("{}", i)
-        }
-        Value::Double(d) => {
-            format!("{}", d)
-        }
-        Value::String(s) => s.clone(),
-        Value::Bool(b) => b.to_string(),
     }
 }
 
@@ -463,69 +389,15 @@ mod tests {
         let types = TypeCollector::new();
         let mut main = Function::new(".main".into(), types.any(), &Vec::new());
         main.code
-            .push(OpCodes::Push(Rc::new(Value::String("Hello world".into()))));
-        main.code.push(OpCodes::Push(Rc::new(Value::Integer(1))));
+            .push(OpCodes::Push(Rc::new(Value::string("Hello world".into()))));
+        main.code.push(OpCodes::Push(Rc::new(Value::int(1))));
         main.code
-            .push(OpCodes::Push(Rc::new(Value::String("println".into()))));
-        main.code.push(OpCodes::Call);
+            .push(OpCodes::Push(Rc::new(Value::string("println".into()))));
+        main.code.push(OpCodes::CallRustFn);
         main.code.push(OpCodes::Return);
         let mut env = Env::new(types);
+        crate::builtins::add(&mut env);
         env.add_function(".main".into(), main);
         let _ = Interpreter::interpret(env);
-    }
-
-    #[test]
-    pub fn scope_get_var_from_parent() {
-        let mut parent_scope = Scope::new();
-        parent_scope.define_variable("test".into(), Rc::new(Value::bool(true)));
-        let child_scope = Scope::with_parent(parent_scope);
-
-        let test_var = child_scope.get_variable("test");
-
-        match *test_var {
-            Value::Bool(b) => assert!(b),
-            _ => unreachable!(),
-        }
-    }
-
-    #[test]
-    pub fn scope_get_local_var_that_also_exists_in_parent() {
-        let mut parent_scope = Scope::new();
-        parent_scope.define_variable("somevar".into(), Rc::new(Value::bool(false)));
-        let mut child_scope = Scope::with_parent(parent_scope);
-        child_scope.define_variable("somevar".into(), Rc::new(Value::bool(true)));
-
-        let somevar = child_scope.get_variable("somevar");
-
-        match *somevar {
-            Value::Bool(b) => assert!(b),
-            _ => unreachable!(),
-        }
-    }
-
-    #[test]
-    pub fn scope_get_local_var_that_only_exists_in_child() {
-        let mut parent_scope = Scope::new();
-        parent_scope.define_variable("somevar2".into(), Rc::new(Value::bool(false)));
-        let mut child_scope = Scope::with_parent(parent_scope);
-        child_scope.define_variable("somevar1".into(), Rc::new(Value::bool(true)));
-
-        let somevar = child_scope.get_variable("somevar1");
-
-        match *somevar {
-            Value::Bool(b) => assert!(b),
-            _ => unreachable!(),
-        }
-    }
-
-    #[test]
-    #[should_panic]
-    pub fn scope_try_get_var_that_is_not_defined() {
-        let mut parent_scope = Scope::new();
-        parent_scope.define_variable("somevar".into(), Rc::new(Value::bool(false)));
-        let mut child_scope = Scope::with_parent(parent_scope);
-        child_scope.define_variable("somevar".into(), Rc::new(Value::bool(true)));
-
-        let _ = child_scope.get_variable("notdefined");
     }
 }

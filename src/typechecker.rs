@@ -144,6 +144,8 @@ fn check_expr(
         ExprKind::BoolConstant(_) => Ok(()), // bool constant on its own can't have the wrong type
         ExprKind::IntConstant(_) => Ok(()),  // int constant on its own can't have the wrong type
         ExprKind::StringConstant(_) => Ok(()), // string constant on its own can't have the wrong type
+        ExprKind::UnitConstant => Ok(()),      // unit constant on its own can't have the wrong type
+        ExprKind::StackPop => Ok(()),
         ExprKind::Reference(_) => Ok(()),
         ExprKind::Comparison(l, r, op) => {
             check_expr(func, l.ptr.deref(), expr_index, root, types)?;
@@ -219,6 +221,8 @@ fn find_expr(
         ExprKind::BoolConstant(_) => types.boolean(),
         ExprKind::IntConstant(_) => types.int64(),
         ExprKind::StringConstant(_) => types.string(),
+        ExprKind::UnitConstant => types.unit(),
+        ExprKind::StackPop => types.any(),
         ExprKind::Comparison(_, _, _) => types.boolean(),
         ExprKind::NewAssignment(_, v) => find_expr(func, &v, expr_index, root, types)?,
         ExprKind::Reassignment(_, v) => find_expr(func, &v, expr_index, root, types)?,
@@ -235,7 +239,7 @@ fn find_expr(
             let right = find_expr(func, &right, expr_index, root, types)?;
             binary_op_result_type_of(left, right, op, types)?
         }
-        ExprKind::FunctionCall(func_to_call, _) => find_function(func_to_call.as_str(), root)?
+        ExprKind::FunctionCall(func_to_call, ..) => find_function(func_to_call.as_str(), root)?
             .return_type
             .clone(),
     })

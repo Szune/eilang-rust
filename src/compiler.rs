@@ -19,7 +19,6 @@ use crate::ast::*;
 use crate::env::Env;
 use crate::function::Function;
 use crate::ops::OpCodes;
-use crate::types::TypeCollector;
 use crate::values::Value;
 use std::convert::TryFrom;
 use std::rc::Rc;
@@ -44,11 +43,9 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    pub fn compile(ast: Root, types: TypeCollector) -> Env {
+    pub fn compile(env: Env, ast: Root) -> Env {
         //println!("Compiling AST {:?}", ast);
-        let mut compiler = Compiler {
-            env: Env::new(types),
-        };
+        let mut compiler = Compiler { env };
         compiler.compile_root(ast.functions);
         return compiler.env;
         // TODO: consider optimizing away unnecessary nodes
@@ -87,7 +84,7 @@ impl Compiler {
             ExprKind::NewAssignment(ident, expr) => {
                 expr.ptr.accept_in_function(self, func);
                 func.code
-                    .push(OpCodes::Push(Rc::new(Value::String(ident.clone()))));
+                    .push(OpCodes::Push(Rc::new(Value::string(ident.clone()))));
                 func.code.push(OpCodes::DefVar)
             }
             _ => unreachable!(),
@@ -99,7 +96,7 @@ impl Compiler {
             ExprKind::Reassignment(ident, expr) => {
                 expr.ptr.accept_in_function(self, func);
                 func.code
-                    .push(OpCodes::Push(Rc::new(Value::String(ident.clone()))));
+                    .push(OpCodes::Push(Rc::new(Value::string(ident.clone()))));
                 func.code.push(OpCodes::SetVar)
             }
             _ => unreachable!(),
@@ -168,7 +165,7 @@ impl Compiler {
 
                 // if it's a function returning unit, write an implicit return
                 if newf.return_type.id == self.env.types.unit().id {
-                    f.code.push(OpCodes::Push(Rc::new(Value::Unit)));
+                    f.code.push(OpCodes::Push(Rc::new(Value::unit())));
                     f.code.push(OpCodes::Return);
                 }
 
@@ -190,7 +187,7 @@ impl Compiler {
             }
             ExprKind::Return(None) => {
                 //println!("Compiling empty return");
-                func.code.push(OpCodes::Push(Rc::new(Value::Unit)));
+                func.code.push(OpCodes::Push(Rc::new(Value::unit())));
                 func.code.push(OpCodes::Return);
             }
             _ => unreachable!(),
@@ -239,7 +236,12 @@ impl Compiler {
                 ))));
                 func.code
                     .push(OpCodes::Push(Rc::new(Value::string(name.clone()))));
-                func.code.push(OpCodes::Call);
+
+                if self.env.is_builtin(name) {
+                    func.code.push(OpCodes::CallRustFn);
+                } else {
+                    func.code.push(OpCodes::Call);
+                }
                 // push args
                 // push arg count
                 // push name
@@ -272,5 +274,13 @@ impl Compiler {
                 .push(OpCodes::Push(Rc::new(Value::string(str.clone())))),
             _ => unreachable!(),
         }
+    }
+
+    pub fn visit_unit_constant(&mut self, _: &ExprKind, func: &mut Function) {
+        func.code.push(OpCodes::Push(Rc::new(Value::unit())));
+    }
+
+    pub fn visit_pop(&self, _: &ExprKind, func: &mut Function) {
+        func.code.push(OpCodes::Pop);
     }
 }

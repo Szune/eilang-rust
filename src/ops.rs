@@ -20,13 +20,14 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum OpCodes {
-    Println,
+    CallRustFn,
     Add,
     Subtract,
     Call,
     Jump(usize),
     BranchIfFalse(usize),
     Push(Rc<Value>),
+    Pop,
     Reference(String),
     Return,
     DefVar,

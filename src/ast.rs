@@ -80,23 +80,23 @@ impl Expr {
                 //println!("visiting function in function {}", name.clone());
                 unimplemented!("function in function");
             }
-            ExprKind::If(_, _, _) => {
+            ExprKind::If(..) => {
                 compiler.visit_if(&self.kind, f);
             }
-            ExprKind::Comparison(_, _, _) => {
+            ExprKind::Comparison(..) => {
                 compiler.visit_comparison(&self.kind, f);
             }
             ExprKind::BoolConstant(_) => {
-                //println!("int constant");
                 compiler.visit_bool_constant(&self.kind, f);
             }
             ExprKind::IntConstant(_) => {
-                //println!("int constant");
                 compiler.visit_int_constant(&self.kind, f);
             }
             ExprKind::StringConstant(_) => {
-                //println!("int constant");
                 compiler.visit_string_constant(&self.kind, f);
+            }
+            ExprKind::UnitConstant => {
+                compiler.visit_unit_constant(&self.kind, f);
             }
             ExprKind::Return(_) => {
                 //println!("visiting return in function");
@@ -106,18 +106,21 @@ impl Expr {
                 //println!("visiting reference in function");
                 compiler.visit_reference(&self.kind, f);
             }
-            ExprKind::BinaryOp(_, _, _) => {
+            ExprKind::BinaryOp(..) => {
                 compiler.visit_binary_op(&self.kind, f);
             }
-            ExprKind::FunctionCall(_, _) => {
+            ExprKind::FunctionCall(..) => {
                 //println!("visiting function call in function");
                 compiler.visit_function_call(&self.kind, f);
             }
-            ExprKind::NewAssignment(_, _) => {
+            ExprKind::NewAssignment(..) => {
                 compiler.visit_new_assignment(&self.kind, f);
             }
-            ExprKind::Reassignment(_, _) => {
+            ExprKind::Reassignment(..) => {
                 compiler.visit_reassignment(&self.kind, f);
+            }
+            ExprKind::StackPop => {
+                compiler.visit_pop(&self.kind, f);
             }
         }
     }
@@ -140,11 +143,14 @@ pub enum ExprKind {
     IntConstant(i64),
     StringConstant(String),
     BoolConstant(bool),
+    UnitConstant,
     Return(Option<Ptr<Expr>>),
     Reference(String),
     Comparison(Ptr<Expr>, Ptr<Expr>, Comparison),
     BinaryOp(Ptr<Expr>, Ptr<Expr>, BinaryOp),
+    /// (ident, arguments)
     FunctionCall(String, Vec<Ptr<Expr>>),
+    StackPop,
 }
 
 #[derive(Debug, PartialEq)]

@@ -345,6 +345,10 @@ impl Parser {
             }
             TokenType::LeftParenthesis => {
                 self.require(TokenType::LeftParenthesis);
+                if self.is_token(TokenType::RightParenthesis) {
+                    self.require(TokenType::RightParenthesis);
+                    return Expr::new(ExprKind::UnitConstant);
+                }
                 let expr = self.parse_or();
                 self.require(TokenType::RightParenthesis);
                 return expr;

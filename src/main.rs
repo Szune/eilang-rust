@@ -16,13 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 pub mod ast;
+pub mod builtins;
 pub mod compiler;
 pub mod env;
 pub mod function;
 pub mod interpreter;
 pub mod lexer;
 pub mod ops;
+pub mod optimizer;
 pub mod parser;
+pub mod rustfn;
+pub mod scope;
 pub mod token;
 pub mod typechecker;
 pub mod types;
@@ -43,7 +47,7 @@ fn main() {
         fn add2(x: int, y: int) {
             println($"x + y = {x + y}");
         }
-
+        
         xyyy := false;
         xyyy = true;
         if xyyy {
@@ -126,7 +130,10 @@ fn main() {
     let typecheck = typechecker::check_types(&mut ast, &mut types);
     match typecheck {
         Ok(_) => {
-            let env = Compiler::compile(ast, types);
+            let mut env = env::Env::new(types);
+            builtins::add(&mut env);
+            optimizer::optimize(&mut ast);
+            let env = Compiler::compile(env, ast);
             //println!("{:#?}", env.get_function(".main".into()).code.iter().enumerate().collect::<Vec<(usize,&ops::OpCodes)>>());
             //println!("Running");
             Interpreter::interpret(env);

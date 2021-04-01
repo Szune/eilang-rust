@@ -15,30 +15,26 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::ast::Ptr;
-use crate::function::{Function, Parameter};
-use crate::ops::OpCodes;
+use crate::function::Function;
+use crate::rustfn::RustFunction;
 use crate::types::TypeCollector;
+use crate::values::Value;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 pub struct Env {
     pub types: TypeCollector,
     functions: HashMap<String, Rc<Function>>,
+    rust_functions: HashMap<String, RustFunction>,
 }
 
 impl Env {
     pub fn new(types: TypeCollector) -> Env {
-        //let types = TypeCollector::new();
-        let unit = types.unit();
-        let mut env = Env {
+        let env = Env {
             types,
-            functions: HashMap::<String, Rc<Function>>::new(),
+            functions: HashMap::new(),
+            rust_functions: HashMap::new(),
         };
-        let mut println = Function::new("println".into(), unit, &Vec::<Ptr<Parameter>>::new());
-        println.code.push(OpCodes::Println);
-        println.code.push(OpCodes::Return);
-        env.add_function("println".into(), println);
         return env;
     }
 
@@ -46,7 +42,22 @@ impl Env {
         self.functions.insert(name, Rc::new(function));
     }
 
-    pub fn get_function(&self, name: String) -> Option<Rc<Function>> {
-        return self.functions.get(name.as_str()).map(Rc::clone);
+    pub fn get_function(&self, name: &str) -> Option<Rc<Function>> {
+        return self.functions.get(name).map(Rc::clone);
+    }
+
+    pub fn add_rust_function(&mut self, name: String, function: RustFunction) {
+        self.rust_functions.insert(name, function);
+    }
+
+    pub fn call_rust_function(&self, name: &str, stack: &mut Vec<Rc<Value>>) {
+        self.rust_functions
+            .get(name)
+            .expect(&format!("Could not find rust function {}", name))
+            .call(stack);
+    }
+
+    pub fn is_builtin(&self, name: &str) -> bool {
+        self.rust_functions.contains_key(name)
     }
 }
