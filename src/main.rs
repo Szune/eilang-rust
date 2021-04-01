@@ -119,7 +119,6 @@ fn main() {
     ));
     let (mut ast, mut types) = Parser::parse(lexer_for_parser);
     //println!("Parsed AST: {:#?}", ast);
-    //let (ast, success) = typechecker::check_types(ast, &mut types);
     let typecheck = typechecker::check_types(&mut ast, &mut types, &builtins::get_names());
     match typecheck {
         Ok(_) => {
@@ -127,9 +126,9 @@ fn main() {
             builtins::add(&mut env);
             optimizer::optimize(&mut ast);
             let env = Compiler::compile(env, ast);
-            //println!("{:#?}", env.get_function(".main".into()).code.iter().enumerate().collect::<Vec<(usize,&ops::OpCodes)>>());
-            //println!("Running");
-            Interpreter::interpret(env);
+            //println!("{:#?}", env.get_function("main".into()).code.iter().enumerate().collect::<Vec<(usize,&ops::OpCodes)>>());
+            let result = Interpreter::interpret(env);
+            println!("Eilang code returned: {:?}", result);
         }
         Err(err) => {
             panic!("Type checking failed: {}", err);

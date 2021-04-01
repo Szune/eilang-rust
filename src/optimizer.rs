@@ -18,6 +18,7 @@
 
 use crate::ast::{Block, Expr, ExprKind, Ptr, Root};
 
+/// Tries to optimize the AST before compiling it
 pub fn optimize(ast: &mut Root) {
     for f in &mut ast.functions {
         match &mut f.kind {

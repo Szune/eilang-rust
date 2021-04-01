@@ -24,6 +24,13 @@ use std::rc::Rc;
 pub struct Scope {
     vars: HashMap<String, Rc<Value>>,
     parent: Rc<RefCell<Option<Scope>>>,
+    typ: ScopeType,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum ScopeType {
+    Global,
+    Function,
 }
 
 impl Scope {
@@ -31,6 +38,7 @@ impl Scope {
         Self {
             vars: HashMap::new(),
             parent: Rc::new(RefCell::new(None)),
+            typ: ScopeType::Global,
         }
     }
 
@@ -38,7 +46,12 @@ impl Scope {
         Self {
             vars: HashMap::new(),
             parent: Rc::new(RefCell::new(Some(parent))),
+            typ: ScopeType::Function,
         }
+    }
+
+    pub fn get_type(&self) -> ScopeType {
+        return self.typ.clone();
     }
 
     /// Define variable in current scope
@@ -47,6 +60,12 @@ impl Scope {
             .entry(var)
             .and_modify(|e| *e = Rc::clone(&val))
             .or_insert_with(|| Rc::clone(&val));
+    }
+
+    pub fn get_parent(self) -> Option<Scope> {
+        Rc::try_unwrap(self.parent)
+            .unwrap_or(RefCell::new(None))
+            .into_inner()
     }
 
     /// Set value of variable in its containing scope

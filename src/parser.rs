@@ -63,16 +63,30 @@ impl Parser {
                 }
             };
         }
-        global_block.exprs.push(Expr::new(ExprKind::Return(None)));
-        let any = self.types.any();
-        self.root
-            .functions
-            .push(Expr::new(ExprKind::Function(FunctionExpr {
-                name: ".main".into(),
-                return_type: any.clone(),
-                parameters: Vec::new(),
-                code: Ptr(global_block),
-            })));
+
+        if !self.root.functions.iter().any(|f| match &f.kind {
+            ExprKind::Function(exp) => exp.name == "main",
+            _ => false,
+        }) {
+            // main hasn't been defined, wrap global block in a new function and add a return
+            global_block.exprs.push(Expr::new(ExprKind::Return(None)));
+            self.root
+                .functions
+                .push(Expr::new(ExprKind::Function(FunctionExpr {
+                    name: "main".into(),
+                    return_type: self.types.any().clone(),
+                    parameters: Vec::new(),
+                    code: Ptr(global_block),
+                })));
+        } else {
+            // main has been defined, for now that means there can't be any global expressions
+            if !global_block.exprs.is_empty() {
+                panic!(
+                    "Cannot have global expressions if fn main() was defined. At least for now.\nGlobal expressions: {:#?}",
+                    global_block.exprs
+                );
+            }
+        }
     }
 
     fn parse_global_function(&mut self) -> Expr {
@@ -452,7 +466,7 @@ mod tests {
                 ExprKind::Function(f) => f,
                 _ => unreachable!(),
             })
-            .filter(|f| f.name == ".main")
+            .filter(|f| f.name == "main")
             .next()
             .unwrap();
 

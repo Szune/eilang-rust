@@ -18,7 +18,7 @@
 use crate::env::Env;
 use crate::function::Function;
 use crate::ops::OpCodes;
-use crate::scope::Scope;
+use crate::scope::{Scope, ScopeType};
 use crate::values::Value;
 use std::cell::Cell;
 use std::ops::Deref;
@@ -34,13 +34,12 @@ pub struct CallFrame {
 pub struct Interpreter {}
 
 impl Interpreter {
-    pub fn interpret(env: Env) {
+    pub fn interpret(env: Env) -> Rc<Value> {
         let main = env
-            .get_function(".main".into())
+            .get_function("main".into())
             .expect("Missing a main function");
         let mut stack = Vec::<Rc<Value>>::new();
-        let scopes = &mut Vec::<Scope>::new();
-        scopes.push(Scope::new());
+        let mut scope = Scope::new();
         let mut frames = Vec::<CallFrame>::new();
         frames.push(CallFrame {
             addr: Cell::new(0usize),
@@ -95,19 +94,9 @@ impl Interpreter {
                         called_with_arg_count: arg_count,
                     };
 
-                    // TODO: add current scope as parent
-                    //  do I ever need access to multiple scopes from this function?
-                    //  or could I just use a let mut scope = Scope::new();
-                    //  and then do scope = Scope::with_parent(scope); <- that's not going to work, but you get the idea
-                    //  we'll see!
-                    //  Rc might be helpful
-                    //let parent = scopes.last().unwrap();
-                    //scopes.push(Scope::with_parent(parent));
-
-                    scopes.push(Scope::new());
+                    scope = Scope::with_parent(scope);
                     frames.push(fr);
                     skip_inc = true;
-                    //println!("function call in interpreter: {:?}", n);
                     //println!("function call in interpreter: {:?} {:?}", n, args);
                 }
                 OpCodes::CallRustFn => {
@@ -123,14 +112,16 @@ impl Interpreter {
                     stack.push(Rc::clone(&value));
                 }
                 OpCodes::Reference(n) => {
-                    let s = scopes.last_mut().unwrap();
-                    let value = s.get_variable(&n);
+                    let value = scope.get_variable(&n);
                     stack.push(Rc::clone(&value));
                 }
                 OpCodes::Return => {
-                    //println!("Returning from {}", frames.last().unwrap().func.name.clone());
+                    if frame.func.name == "main" && scope.get_type() == ScopeType::Global {
+                        // Could probably have a OpCodes::ReturnFromMain so that no regular returns are poisoned by this if statement
+                        break;
+                    }
                     frames.pop();
-                    scopes.pop();
+                    scope = scope.get_parent().unwrap();
                 }
                 OpCodes::DefVar => {
                     let ident = stack.pop().unwrap();
@@ -139,8 +130,7 @@ impl Interpreter {
                         Value::String(s) => s,
                         _ => unreachable!(),
                     };
-                    let s = scopes.last_mut().unwrap();
-                    s.define_variable(ident.clone(), value);
+                    scope.define_variable(ident.clone(), value);
                 }
                 OpCodes::SetVar => {
                     let ident = stack.pop().unwrap();
@@ -149,13 +139,11 @@ impl Interpreter {
                         Value::String(s) => s,
                         _ => unreachable!(),
                     };
-                    let s = scopes.last_mut().unwrap();
-                    s.set_variable(ident.clone(), value);
+                    scope.set_variable(ident.clone(), value);
                 }
                 OpCodes::FunctionSetVar(n) => {
                     let value = stack.pop();
-                    let s = scopes.last_mut().unwrap();
-                    s.define_variable(n.clone(), value.unwrap());
+                    scope.define_variable(n.clone(), value.unwrap());
                 }
                 OpCodes::Jump(addr) => {
                     frame.addr.set(*addr);
@@ -212,7 +200,9 @@ impl Interpreter {
             }
         }
 
+        assert!(!stack.is_empty());
         println!("Stack after interpreting: {:#?}", stack);
+        Rc::clone(stack.last().unwrap())
     }
 
     #[inline]
@@ -387,7 +377,7 @@ mod tests {
     #[test]
     pub fn test_println() {
         let types = TypeCollector::new();
-        let mut main = Function::new(".main".into(), types.any(), &Vec::new());
+        let mut main = Function::new("main".into(), types.any(), &Vec::new());
         main.code
             .push(OpCodes::Push(Rc::new(Value::string("Hello world".into()))));
         main.code.push(OpCodes::Push(Rc::new(Value::int(1))));
@@ -397,7 +387,7 @@ mod tests {
         main.code.push(OpCodes::Return);
         let mut env = Env::new(types);
         crate::builtins::add(&mut env);
-        env.add_function(".main".into(), main);
+        env.add_function("main".into(), main);
         let _ = Interpreter::interpret(env);
     }
 }
