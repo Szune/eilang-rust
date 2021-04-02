@@ -143,20 +143,74 @@ fn check_expr(
             }
             Ok(())
         }
-        ExprKind::If(_if, v, e) => {
-            check_expr(func, _if.ptr.deref(), expr_index, root, types, builtins)?;
-            let if_type = find_expr(func, _if, expr_index, root, types)?;
+        ExprKind::If(if_expr, block) => {
+            check_expr(func, if_expr.ptr.deref(), expr_index, root, types, builtins)?;
+            let if_type = find_expr(func, if_expr, expr_index, root, types)?;
             if if_type.id != types.boolean().id {
                 return Err(format!(
                     "Cannot use {:?} in an if statement because it is not a bool value",
                     if_type.name
                 ));
             }
-
-            check_block(func, v, root, types, builtins)?;
-            if let Some(e) = e {
-                check_block(func, e, root, types, builtins)?;
+            check_block(func, block, root, types, builtins)?;
+            Ok(())
+        }
+        ExprKind::IfElse(if_expr, true_block, else_block) => {
+            check_expr(func, if_expr.ptr.deref(), expr_index, root, types, builtins)?;
+            let if_type = find_expr(func, if_expr, expr_index, root, types)?;
+            if if_type.id != types.boolean().id {
+                return Err(format!(
+                    "Cannot use {:?} in an if statement because it is not a bool value",
+                    if_type.name
+                ));
             }
+            check_block(func, true_block, root, types, builtins)?;
+            check_block(func, else_block, root, types, builtins)?;
+            Ok(())
+        }
+        ExprKind::IfElseIf(if_expr, block, else_if_exprs) => {
+            check_expr(func, if_expr.ptr.deref(), expr_index, root, types, builtins)?;
+            let if_type = find_expr(func, if_expr, expr_index, root, types)?;
+            if if_type.id != types.boolean().id {
+                return Err(format!(
+                    "Cannot use {:?} in an if statement because it is not a bool value",
+                    if_type.name
+                ));
+            }
+            check_block(func, block, root, types, builtins)?;
+            for else_if in else_if_exprs.iter() {
+                let if_type = find_expr(func, &else_if.ptr.if_expr, expr_index, root, types)?;
+                if if_type.id != types.boolean().id {
+                    return Err(format!(
+                        "Cannot use {:?} in an if statement because it is not a bool value",
+                        if_type.name
+                    ));
+                }
+                check_block(func, &else_if.ptr.block, root, types, builtins)?;
+            }
+            Ok(())
+        }
+        ExprKind::IfElseIfElse(if_expr, block, else_if_exprs, else_block) => {
+            check_expr(func, if_expr.ptr.deref(), expr_index, root, types, builtins)?;
+            let if_type = find_expr(func, if_expr, expr_index, root, types)?;
+            if if_type.id != types.boolean().id {
+                return Err(format!(
+                    "Cannot use {:?} in an if statement because it is not a bool value",
+                    if_type.name
+                ));
+            }
+            check_block(func, block, root, types, builtins)?;
+            for else_if in else_if_exprs.iter() {
+                let if_type = find_expr(func, &else_if.ptr.if_expr, expr_index, root, types)?;
+                if if_type.id != types.boolean().id {
+                    return Err(format!(
+                        "Cannot use {:?} in an if statement because it is not a bool value",
+                        if_type.name
+                    ));
+                }
+                check_block(func, &else_if.ptr.block, root, types, builtins)?;
+            }
+            check_block(func, else_block, root, types, builtins)?;
             Ok(())
         }
         ExprKind::BoolConstant(_) => Ok(()), // bool constant on its own can't have the wrong type
@@ -235,13 +289,16 @@ fn find_expr(
 ) -> Result<Type, String> {
     Ok(match &expr.ptr.kind {
         ExprKind::Function(_) => types.unit(), // at a later point function declarations should be expressions
-        ExprKind::If(_, _, _) => types.unit(), // for now, I do like the idea of ifs as expressions though
+        ExprKind::If(..) => types.unit(), // for now, I do like the idea of ifs as expressions though
+        ExprKind::IfElse(..) => types.unit(),
+        ExprKind::IfElseIf(..) => types.unit(),
+        ExprKind::IfElseIfElse(..) => types.unit(),
         ExprKind::BoolConstant(_) => types.boolean(),
         ExprKind::IntConstant(_) => types.int64(),
         ExprKind::StringConstant(_) => types.string(),
         ExprKind::UnitConstant => types.unit(),
         ExprKind::StackPop => types.any(),
-        ExprKind::Comparison(_, _, _) => types.boolean(),
+        ExprKind::Comparison(..) => types.boolean(),
         ExprKind::NewAssignment(_, v) => find_expr(func, &v, expr_index, root, types)?,
         ExprKind::Reassignment(_, v) => find_expr(func, &v, expr_index, root, types)?,
         ExprKind::Return(v) => {

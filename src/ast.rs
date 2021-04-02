@@ -95,6 +95,15 @@ impl Expr {
             ExprKind::If(..) => {
                 compiler.visit_if(&self.kind, f);
             }
+            ExprKind::IfElse(..) => {
+                compiler.visit_if_else(&self.kind, f);
+            }
+            ExprKind::IfElseIf(..) => {
+                compiler.visit_if_else_if(&self.kind, f);
+            }
+            ExprKind::IfElseIfElse(..) => {
+                compiler.visit_if_else_if_else(&self.kind, f);
+            }
             ExprKind::Comparison(..) => {
                 compiler.visit_comparison(&self.kind, f);
             }
@@ -147,11 +156,32 @@ pub struct FunctionExpr {
 }
 
 #[derive(Debug)]
+pub struct ElseIf {
+    pub if_expr: Ptr<Expr>,
+    pub block: Ptr<Block>,
+}
+
+impl ElseIf {
+    #[inline(always)]
+    pub fn new(if_expr: Ptr<Expr>, block: Ptr<Block>) -> ElseIf {
+        ElseIf { if_expr, block }
+    }
+}
+
+#[derive(Debug)]
 pub enum ExprKind {
     Function(FunctionExpr),
     NewAssignment(String, Ptr<Expr>),
     Reassignment(String, Ptr<Expr>),
-    If(Ptr<Expr>, Ptr<Block>, Option<Ptr<Block>>),
+    // Might merge all these different If variants to a single that handles all, we'll see
+    /// if 1 == 1 { }
+    If(Ptr<Expr>, Ptr<Block>),
+    /// if 1 == 1 { } else { }
+    IfElse(Ptr<Expr>, Ptr<Block>, Ptr<Block>),
+    /// if 1 == 1 { } else if 2 == 2 { }
+    IfElseIf(Ptr<Expr>, Ptr<Block>, Vec<Ptr<ElseIf>>),
+    /// if 1 == 1 { } else if 2 == 2 { } else { }
+    IfElseIfElse(Ptr<Expr>, Ptr<Block>, Vec<Ptr<ElseIf>>, Ptr<Block>),
     IntConstant(i64),
     StringConstant(String),
     BoolConstant(bool),

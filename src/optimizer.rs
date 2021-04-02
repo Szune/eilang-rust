@@ -36,11 +36,25 @@ fn optimize_root_expr(block: &mut Ptr<Block>) {
     for (i, expr) in &mut block.ptr.exprs.iter_mut().enumerate() {
         match &mut expr.kind {
             ExprKind::FunctionCall(_, _) => offsets.push(i),
-            ExprKind::If(_, ref mut a, ref mut b) => {
+            ExprKind::If(_, ref mut a) => {
                 optimize_root_expr(a);
-                if let Some(ref mut b) = b {
-                    optimize_root_expr(b);
+            }
+            ExprKind::IfElse(_, ref mut a, ref mut b) => {
+                optimize_root_expr(a);
+                optimize_root_expr(b);
+            }
+            ExprKind::IfElseIf(_, ref mut a, ref mut b) => {
+                optimize_root_expr(a);
+                for e in b.iter_mut() {
+                    optimize_root_expr(&mut e.ptr.block);
                 }
+            }
+            ExprKind::IfElseIfElse(_, ref mut a, ref mut b, ref mut c) => {
+                optimize_root_expr(a);
+                for e in b.iter_mut() {
+                    optimize_root_expr(&mut e.ptr.block);
+                }
+                optimize_root_expr(c);
             }
             _ => (),
         }

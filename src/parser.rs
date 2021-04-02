@@ -149,18 +149,44 @@ impl Parser {
                 Expr::new(ExprKind::Return(Some(Ptr(expr))))
             }
             TokenType::If => {
-                self.consume();
-                let if_expr = self.parse_or();
+                self.consume(); // if
+                let if_expr = Ptr(self.parse_or());
                 let true_block = self.parse_block();
-                let else_block = match self.buffer[0].typ {
-                    TokenType::Else => {
-                        self.consume();
-                        Some(self.parse_block())
-                    }
-                    _ => None,
-                };
+                if !matches!(self.buffer[0].typ, TokenType::Else) {
+                    // only if
+                    return Expr::new(ExprKind::If(if_expr, true_block));
+                }
 
-                Expr::new(ExprKind::If(Ptr(if_expr), true_block, else_block))
+                if !matches!(self.buffer[1].typ, TokenType::If) {
+                    // if -> else
+                    self.consume(); // else
+                    let else_block = self.parse_block();
+                    return Expr::new(ExprKind::IfElse(if_expr, true_block, else_block));
+                }
+
+                // if -> else if
+                let mut else_ifs = Vec::new();
+                while matches!(
+                    (&self.buffer[0].typ, &self.buffer[1].typ),
+                    (TokenType::Else, TokenType::If)
+                ) {
+                    self.consume(); // else
+                    self.consume(); // if
+                    let else_if_expr = Ptr(self.parse_or());
+                    let block = self.parse_block();
+                    else_ifs.push(Ptr(ElseIf::new(else_if_expr, block)));
+                }
+
+                if !matches!(self.buffer[0].typ, TokenType::Else) {
+                    return Expr::new(ExprKind::IfElseIf(if_expr, true_block, else_ifs));
+                }
+
+                // if -> else if -> else
+                self.consume(); // else
+                let else_block = self.parse_block();
+                Expr::new(ExprKind::IfElseIfElse(
+                    if_expr, true_block, else_ifs, else_block,
+                ))
             }
             TokenType::Identifier(_) => {
                 let expr = self.parse_outermost_expr();

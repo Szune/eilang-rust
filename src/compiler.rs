@@ -103,42 +103,163 @@ impl Compiler {
         }
     }
 
-    pub fn visit_if(&mut self, _if: &ExprKind, func: &mut Function) {
-        match _if {
-            ExprKind::If(if_expr, true_block, else_block) => {
-                if let Some(el) = else_block {
-                    if_expr.ptr.accept_in_function(self, func);
-                    let op_addr = func.code.len();
-                    for e in &true_block.ptr.exprs {
+    pub fn visit_if(&mut self, if_expr: &ExprKind, func: &mut Function) {
+        match if_expr {
+            ExprKind::If(if_expr, block) => {
+                if_expr.ptr.accept_in_function(self, func);
+                let op_addr = func.code.len();
+                for e in &block.ptr.exprs {
+                    e.accept_in_function(self, func);
+                }
+
+                let end_block_addr = func.code.len() + 1;
+                // patch in branch op
+                func.code
+                    .insert(op_addr, OpCodes::BranchIfFalse(end_block_addr));
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn visit_if_else(&mut self, if_expr: &ExprKind, func: &mut Function) {
+        match if_expr {
+            ExprKind::IfElse(if_expr, true_block, else_block) => {
+                if_expr.ptr.accept_in_function(self, func);
+                let op_addr = func.code.len();
+                for e in &true_block.ptr.exprs {
+                    e.accept_in_function(self, func);
+                }
+
+                let true_block_end_jmp_addr = func.code.len() + 1; // + BranchIfFalse op
+
+                let el_addr = func.code.len() + 2; // + BranchIfElse and Jump
+
+                for e in &else_block.ptr.exprs {
+                    e.accept_in_function(self, func);
+                }
+
+                // patch in branch op
+                func.code.insert(op_addr, OpCodes::BranchIfFalse(el_addr));
+
+                // patch in jump past else block at end of true block
+                let end_block_addr = func.code.len() + 1;
+                func.code
+                    .insert(true_block_end_jmp_addr, OpCodes::Jump(end_block_addr));
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn visit_if_else_if(&mut self, if_expr: &ExprKind, func: &mut Function) {
+        match if_expr {
+            ExprKind::IfElseIf(if_expr, first_block, else_ifs) => {
+                // 1. compile all if expressions
+                if_expr.ptr.accept_in_function(self, func);
+                func.code.push(OpCodes::BranchIfTrue(0)); // TODO: patch in the right address
+                let first_if_op = func.code.len() - 1;
+
+                let mut branch_op_indices = Vec::new();
+                for else_if in else_ifs {
+                    else_if.ptr.if_expr.ptr.accept_in_function(self, func);
+                    func.code.push(OpCodes::BranchIfTrue(0)); // TODO: patch in the right address
+                    branch_op_indices.push(func.code.len() - 1);
+                }
+
+                // 2. compile if block and patch branch op
+                let first_if_block_jmp_to = func.code.len();
+                *func.code.get_mut(first_if_op).unwrap() =
+                    OpCodes::BranchIfTrue(first_if_block_jmp_to);
+                for e in &first_block.ptr.exprs {
+                    e.accept_in_function(self, func);
+                }
+                func.code.push(OpCodes::Jump(0));
+                let first_if_block_end_jmp_op = func.code.len() - 1;
+
+                let mut else_if_block_end_jmp_ops = Vec::new();
+                // 3. compile all else if blocks and patch branch ops
+                for (i, else_if) in else_ifs.iter().enumerate() {
+                    let branch_op_index = branch_op_indices.get(i).unwrap();
+                    let else_if_jmp_to = func.code.len();
+                    *func.code.get_mut(*branch_op_index).unwrap() =
+                        OpCodes::BranchIfTrue(else_if_jmp_to);
+
+                    for e in &else_if.ptr.block.ptr.exprs {
                         e.accept_in_function(self, func);
                     }
 
-                    let true_block_end_jmp_addr = func.code.len() + 1; // + BranchIfFalse op
+                    func.code.push(OpCodes::Jump(0)); // TODO: patch in the right address
+                    else_if_block_end_jmp_ops.push(func.code.len() - 1);
+                }
+                let end_pos = func.code.len();
 
-                    let el_addr = func.code.len() + 2; // + BranchIfElse and Jump
+                // 4. patch in the correct end address
+                *func.code.get_mut(first_if_block_end_jmp_op).unwrap() = OpCodes::Jump(end_pos);
 
-                    for e in &el.ptr.exprs {
+                for i in else_if_block_end_jmp_ops {
+                    *func.code.get_mut(i).unwrap() = OpCodes::Jump(end_pos);
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn visit_if_else_if_else(&mut self, if_expr: &ExprKind, func: &mut Function) {
+        match if_expr {
+            ExprKind::IfElseIfElse(if_expr, first_block, else_ifs, else_block) => {
+                // 1. compile all if expressions
+                if_expr.ptr.accept_in_function(self, func);
+                func.code.push(OpCodes::BranchIfTrue(0)); // TODO: patch in the right address
+                let first_if_op = func.code.len() - 1;
+
+                let mut branch_op_indices = Vec::new();
+                for else_if in else_ifs {
+                    else_if.ptr.if_expr.ptr.accept_in_function(self, func);
+                    func.code.push(OpCodes::BranchIfTrue(0)); // TODO: patch in the right address
+                    branch_op_indices.push(func.code.len() - 1);
+                }
+                func.code.push(OpCodes::Jump(0)); // jump unconditionally to else block
+                let jmp_to_else_op = func.code.len() - 1;
+
+                // 2. compile if block and patch branch op
+                let first_if_block_jmp_to = func.code.len();
+                *func.code.get_mut(first_if_op).unwrap() =
+                    OpCodes::BranchIfTrue(first_if_block_jmp_to);
+                for e in &first_block.ptr.exprs {
+                    e.accept_in_function(self, func);
+                }
+                func.code.push(OpCodes::Jump(0));
+                let first_if_block_end_jmp_op = func.code.len() - 1;
+
+                let mut else_if_block_end_jmp_ops = Vec::new();
+                // 3. compile all else if blocks and patch branch ops
+                for (i, else_if) in else_ifs.iter().enumerate() {
+                    let branch_op_index = branch_op_indices.get(i).unwrap();
+                    let else_if_jmp_to = func.code.len();
+                    *func.code.get_mut(*branch_op_index).unwrap() =
+                        OpCodes::BranchIfTrue(else_if_jmp_to);
+
+                    for e in &else_if.ptr.block.ptr.exprs {
                         e.accept_in_function(self, func);
                     }
 
-                    // patch in branch op
-                    func.code.insert(op_addr, OpCodes::BranchIfFalse(el_addr));
+                    func.code.push(OpCodes::Jump(0)); // TODO: patch in the right address
+                    else_if_block_end_jmp_ops.push(func.code.len() - 1);
+                }
+                // 4. compile else block
+                let else_block_start_addr = func.code.len();
+                *func.code.get_mut(jmp_to_else_op).unwrap() = OpCodes::Jump(else_block_start_addr);
+                for e in &else_block.ptr.exprs {
+                    e.accept_in_function(self, func);
+                }
+                // else should not need a jump since it's at the very end
 
-                    // patch in jump past else block at end of true block
-                    let end_block_addr = func.code.len() + 1;
-                    func.code
-                        .insert(true_block_end_jmp_addr, OpCodes::Jump(end_block_addr));
-                } else {
-                    if_expr.ptr.accept_in_function(self, func);
-                    let op_addr = func.code.len();
-                    for e in &true_block.ptr.exprs {
-                        e.accept_in_function(self, func);
-                    }
+                // 5. patch in the correct end address
+                let end_pos = func.code.len();
 
-                    let end_block_addr = func.code.len() + 1;
-                    // patch in branch op
-                    func.code
-                        .insert(op_addr, OpCodes::BranchIfFalse(end_block_addr));
+                *func.code.get_mut(first_if_block_end_jmp_op).unwrap() = OpCodes::Jump(end_pos);
+
+                for i in else_if_block_end_jmp_ops {
+                    *func.code.get_mut(i).unwrap() = OpCodes::Jump(end_pos);
                 }
             }
             _ => unreachable!(),

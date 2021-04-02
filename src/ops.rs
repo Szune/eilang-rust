@@ -27,6 +27,7 @@ pub enum OpCodes {
     Divide,
     Call,
     Jump(usize),
+    BranchIfTrue(usize),
     BranchIfFalse(usize),
     Push(Rc<Value>),
     Pop,

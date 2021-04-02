@@ -1,0 +1,3 @@
+:silent
+$check-type = clippy
+&import(lblib/rust.lb)

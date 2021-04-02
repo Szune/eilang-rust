@@ -1,4 +1,4 @@
-# eilang 0.4.0
+# eilang 0.5.0
 
 A rewrite of eilang in Rust to improve the performance of the interpreter, while also reimagining the memory model for
 both improved access times and a smaller memory footprint.
@@ -13,9 +13,11 @@ fn add(x: int, y: int) -> int { // function declarations
 }
 
 added := add(3,2); // variable assignment
-if add(2,3) == added { // basic if statements
+if add(2,3) == added {
     println("works all right");
-} else { // no else if yet
+} else if 2 == 3 {
+    println("there's a bug");
+} else {
     println("there's a bug");
 }
 

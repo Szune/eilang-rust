@@ -135,6 +135,14 @@ impl Interpreter {
                     frame.addr.set(*addr);
                     skip_inc = true;
                 }
+                OpCodes::BranchIfTrue(addr) => {
+                    let br_val = stack.pop().unwrap();
+                    let br_val = br_val.deref();
+                    if matches!(br_val, Value::Bool(true)) {
+                        frame.addr.set(*addr);
+                        skip_inc = true;
+                    }
+                }
                 OpCodes::BranchIfFalse(addr) => {
                     let br_val = stack.pop().unwrap();
                     let br_val = br_val.deref();

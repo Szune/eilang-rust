@@ -38,15 +38,63 @@ use lexer::Lexer;
 use parser::Parser;
 
 fn main() {
+    // TODO:
+    //       1. types
+    //       2. arrays/lists
+    //       3. maps
+    //       4. sets
     // TODO: write more doctests
     // implement different types of chars for different encodings?
     // or just one 'char' that deals with everything as regular bytes?
     let lexer_for_parser = Lexer::new(String::from(
         r#"
+        /*
+        typ point {
+            ctor(x: int, y: int);
+            fn add(other: point) -> point {
+                return *point(me.x + other.x, me.y + other.y);
+            }
+        }
+        
+        println(*point(0,1).add(*point(2,3)));
+        */
+        
         fn add(x: int, y: int) -> int { return x + y; }
 
         fn add2(x: int, y: int) {
             println($"x + y = {x + y}");
+        }
+        
+        if 2 == 3 {
+            println("there's a bug");
+        } else if 2 == 1 {
+            println("there's a bug");
+        } else if 2 == 2 {
+            println("if else if is fine");
+        }
+        
+        if 2 == 3 {
+            println("there's a bug");
+        } else if 3 == 3 {
+            println("else if did not bug out at the first try!");
+        } else {
+            println("there's a bug");
+        }
+        
+        if 2 == 3 {
+            println("there's a bug");
+        } else if 3 == 2 {
+            println("there's a bug");
+        } else {
+            println("else did not bug out at the second try!");
+        }
+        
+        if 3 == 3 {
+            println("if did not bug out at the third try!");
+        } else if 2 == 3 {
+            println("there's a bug");
+        } else {
+            println("there's a bug");
         }
         
         xyyy := false;
